@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Paramètres — FabBoard{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    
+    <h1 class="mb-4"><i class="bi bi-gear"></i> Paramètres</h1>
+    
+    <div class="row">
+        
+        <!-- Configuration générale -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-sliders"></i> Configuration Générale</h5>
+                </div>
+                <div class="card-body">
+                    <form id="form-params-general">
+                        <div class="mb-3">
+                            <label for="param-fablab-name" class="form-label">Nom du Fablab</label>
+                            <input type="text" class="form-control" id="param-fablab-name" value="Loritz'Lab">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="param-refresh" class="form-label">Intervalle de rafraîchissement (secondes)</label>
+                            <input type="number" class="form-control" id="param-refresh" value="30" min="10" max="300">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="param-theme" class="form-label">Thème</label>
+                            <select class="form-select" id="param-theme">
+                                <option value="light">Clair</option>
+                                <option value="dark" selected>Sombre</option>
+                            </select>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> Enregistrer
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sources de données -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-database"></i> Sources de Données</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Configuration des sources externes (Fabtrack, Repetier Server, Nextcloud...)</p>
+                    <div class="list-group" id="sources-list">
+                        <div class="text-center py-3">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Chargement...</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn btn-success mt-3 w-100" data-bs-toggle="modal" data-bs-target="#modalSource">
+                        <i class="bi bi-plus-circle"></i> Ajouter une source
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <div class="row">
+        
+        <!-- À propos -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> À propos</h5>
+                </div>
+                <div class="card-body">
+                    <h6>FabBoard v1.0</h6>
+                    <p class="text-muted">Tableau de bord TV pour Fablab</p>
+                    <hr>
+                    <p><strong>Stack :</strong> Flask 3.1, SQLite, Bootstrap 5.3</p>
+                    <p><strong>Licence :</strong> MIT © 2026 Fablab Loritz</p>
+                    <p><strong>Projet lié :</strong> <a href="https://github.com/fablabloritz-coder/Fabtrack" target="_blank">Fabtrack</a></p>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+</div>
+
+<!-- Modal : Ajouter une source -->
+<div class="modal fade" id="modalSource" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Ajouter une Source de Données</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-source">
+                    <div class="mb-3">
+                        <label for="source-nom" class="form-label">Nom</label>
+                        <input type="text" class="form-control" id="source-nom" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="source-type" class="form-label">Type</label>
+                        <select class="form-select" id="source-type" required>
+                            <option value="">Choisir...</option>
+                            <option value="fabtrack">Fabtrack</option>
+                            <option value="repetier">Repetier Server</option>
+                            <option value="nextcloud_caldav">Nextcloud CalDAV</option>
+                            <option value="prusalink">PrusaLink</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="source-url" class="form-label">URL</label>
+                        <input type="url" class="form-control" id="source-url" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="source-apikey" class="form-label">Clé API / Mot de passe</label>
+                        <input type="text" class="form-control" id="source-apikey">
+                        <div class="form-text">Laissez vide si non requis</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-success" id="btn-save-source">
+                    <i class="bi bi-check-circle"></i> Ajouter
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/parametres.js') }}"></script>
+{% endblock %}

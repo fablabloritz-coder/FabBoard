@@ -1,0 +1,423 @@
+/* ====================================
+   DASHBOARD.CSS — Phase 1.5 : Système de Slides
+   ==================================== */
+
+/* Conteneur plein écran */
+.dashboard-full {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    padding: 1rem;
+    position: relative;
+}
+
+body.light-mode .dashboard-full {
+    background: linear-gradient(135deg, #f5f5f5 0%, #ffffff 100%);
+}
+
+/* ========== LOADING STATE ==========  */
+.loading-state,
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted, #888);
+}
+
+.empty-state i {
+    font-size: 5rem;
+    margin-bottom: 2rem;
+    opacity: 0.3;
+}
+
+.empty-state h2 {
+    margin-bottom: 1rem;
+}
+
+.empty-state a {
+    color: var(--primary-color, #ff6b35);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.empty-state a:hover {
+    text-decoration: underline;
+}
+
+/* ========== GRILLE DES SLIDES ========== */
+.dashboard-grid {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    gap: 1rem;
+    /* grid-template-columns et rows définis dynamiquement */
+}
+
+/* ========== WIDGETS ========== */
+.dashboard-widget {
+    background: var(--bg-secondary, #2d2d2d);
+    border: 1px solid var(--border-color, #404040);
+    border-radius: 12px;
+    padding: 1.5rem;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+body.light-mode .dashboard-widget {
+    background: #ffffff;
+    border-color: #d0d0d0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.dashboard-widget h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-primary, #ffffff);
+}
+
+body.light-mode .dashboard-widget h3 {
+    color: var(--text-primary, #1a1a1a);
+}
+
+.widget-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted, #666);
+    opacity: 0.5;
+}
+
+.widget-empty i {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+
+.widget-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-size: 1.5rem;
+    color: var(--text-muted, #888);
+}
+
+/* ========== WIDGET : COMPTEURS ========== */
+.widget-compteurs {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.compteurs-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+    align-items: center;
+}
+
+.compteur-item {
+    text-align: center;
+    padding: 1rem;
+    background: var(--bg-primary, #1a1a1a);
+    border-radius: 8px;
+    border: 2px solid var(--border-color, #404040);
+}
+
+body.light-mode .compteur-item {
+    background: #f5f5f5;
+}
+
+.compteur-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--primary-color, #ff6b35);
+    margin-bottom: 0.5rem;
+}
+
+.compteur-label {
+    font-size: 0.875rem;
+    color: var(--text-muted, #888);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ========== WIDGET : ACTIVITÉS ========== */
+.widget-activites {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.activites-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.activite-item {
+    background: var(--bg-primary, #1a1a1a);
+    padding: 1rem;
+    border-radius: 8px;
+    border-left: 4px solid var(--primary-color, #ff6b35);
+}
+
+body.light-mode .activite-item {
+    background: #f5f5f5;
+}
+
+.activite-titre {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary, #ffffff);
+}
+
+body.light-mode .activite-titre {
+    color: var(--text-primary, #1a1a1a);
+}
+
+.activite-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.875rem;
+    color: var(--text-muted, #888);
+    flex-wrap: wrap;
+}
+
+/* ========== WIDGET : HORLOGE ========== */
+.widget-horloge {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.horloge-time {
+    font-size: 4rem;
+    font-weight: 700;
+    color: var(--primary-color, #ff6b35);
+    margin-bottom: 0.5rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.horloge-date {
+    font-size: 1.5rem;
+    color: var(--text-muted, #888);
+    text-transform: capitalize;
+}
+
+/* ========== WIDGET : CALENDRIER ========== */
+.widget-calendrier {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.calendrier-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* ========== WIDGET : FABTRACK ========== */
+.widget-fabtrack-stats,
+.widget-fabtrack-machines,
+.widget-fabtrack-conso {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.fabtrack-stats-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.machines-grid,
+.conso-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* ========== WIDGET : IMPRIMANTES ========== */
+.widget-imprimantes {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.imprimantes-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+/* ========== WIDGET : MÉTÉO ========== */
+.widget-meteo {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ========== WIDGET : TEXTE LIBRE ========== */
+.widget-texte-libre {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.texte-content {
+    flex: 1;
+    overflow-y: auto;
+    font-size: 1.125rem;
+    line-height: 1.6;
+}
+
+/* ========== INDICATEUR DE SLIDE ========== */
+.slide-indicator {
+    position: absolute;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 0.5rem;
+    z-index: 1000;
+}
+
+.slide-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.slide-dot.active {
+    background: var(--primary-color, #ff6b35);
+    border-color: var(--primary-color, #ff6b35);
+    transform: scale(1.3);
+}
+
+body.light-mode .slide-dot {
+    background: rgba(0, 0, 0, 0.2);
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+body.light-mode .slide-dot.active {
+    background: var(--primary-color, #ff6b35);
+    border-color: var(--primary-color, #ff6b35);
+}
+
+/* ========== TRANSITIONS ========== */
+.slide-transition {
+    opacity: 0;
+    transform: translateX(20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.dashboard-grid > * {
+    animation: fadeInUp 0.6s ease backwards;
+}
+
+.dashboard-grid > *:nth-child(1) { animation-delay: 0.1s; }
+.dashboard-grid > *:nth-child(2) { animation-delay: 0.2s; }
+.dashboard-grid > *:nth-child(3) { animation-delay: 0.3s; }
+.dashboard-grid > *:nth-child(4) { animation-delay: 0.4s; }
+.dashboard-grid > *:nth-child(5) { animation-delay: 0.5s; }
+.dashboard-grid > *:nth-child(6) { animation-delay: 0.6s; }
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ========== SCROLLBAR PERSONNALISÉE ========== */
+.activites-list::-webkit-scrollbar,
+.calendrier-list::-webkit-scrollbar,
+.conso-list::-webkit-scrollbar,
+.machines-grid::-webkit-scrollbar {
+    width: 6px;
+}
+
+.activites-list::-webkit-scrollbar-track,
+.calendrier-list::-webkit-scrollbar-track,
+.conso-list::-webkit-scrollbar-track,
+.machines-grid::-webkit-scrollbar-track {
+    background: var(--bg-primary, #1a1a1a);
+    border-radius: 3px;
+}
+
+.activites-list::-webkit-scrollbar-thumb,
+.calendrier-list::-webkit-scrollbar-thumb,
+.conso-list::-webkit-scrollbar-thumb,
+.machines-grid::-webkit-scrollbar-thumb {
+    background: var(--primary-color, #ff6b35);
+    border-radius: 3px;
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 1200px) {
+    .dashboard-full {
+        padding: 0.5rem;
+    }
+    
+    .dashboard-grid {
+        gap: 0.5rem;
+    }
+    
+    .dashboard-widget {
+        padding: 1rem;
+    }
+    
+    .horloge-time {
+        font-size: 3rem;
+    }
+    
+    .horloge-date {
+        font-size: 1.25rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .compteurs-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .imprimantes-grid {
+        grid-template-columns: 1fr;
+    }
+}
