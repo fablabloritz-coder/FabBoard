@@ -151,7 +151,13 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- SortableJS pour le drag & drop -->
+<!-- SortableJS pour le drag & drop avec fallback -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+// Vérification que SortableJS est bien chargé
+if (typeof Sortable === 'undefined') {
+    console.warn('[TEMPLATE] SortableJS n\'a pas pu être chargé depuis le CDN');
+}
+</script>
 <script src="{{ url_for('static', filename='js/slides.js') }}"></script>
 {% endblock %}

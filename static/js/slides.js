@@ -24,11 +24,21 @@ let currentLayouts = [];
 let currentWidgets = [];
 let selectedSlideId = null;
 let sortableInstance = null;
+let isRenderingSlides = false; // Flag pour éviter les rendus concurrents
 
 // ========== INIT ==========
 document.addEventListener('DOMContentLoaded', () => {
-    loadInitialData();
-    setupEventListeners();
+    console.log('[SLIDES] DOM Content Loaded');
+    try {
+        setupEventListeners();
+        loadInitialData();
+    } catch (error) {
+        console.error('[SLIDES] Erreur fatale lors de l\'initialisation:', error);
+        const container = document.getElementById('slidesList');
+        if (container) {
+            container.innerHTML = '<div class="alert alert-danger m-2">Erreur critique d\'initialisation. Vérifiez la console.</div>';
+        }
+    }
 });
 
 async function loadInitialData() {
@@ -42,20 +52,40 @@ async function loadInitialData() {
             apiCall('/api/widgets')
         ]);
         
-        console.log('[SLIDES] Réponses reçues:', { slidesRes, layoutsRes, widgetsRes });
+        console.log('[SLIDES] Réponses reçues API:', {
+            slides: slidesRes,
+            layouts: layoutsRes,
+            widgets: widgetsRes
+        });
         
-        currentSlides = slidesRes.data;
-        currentLayouts = layoutsRes.data;
-        currentWidgets = widgetsRes.data;
+        // Validation des réponses
+        if (!slidesRes || !slidesRes.data) {
+            throw new Error('Réponse invalide pour /api/slides');
+        }
+        if (!layoutsRes || !layoutsRes.data) {
+            throw new Error('Réponse invalide pour /api/layouts');
+        }
+        if (!widgetsRes || !widgetsRes.data) {
+            throw new Error('Réponse invalide pour /api/widgets');
+        }
         
-        console.log('[SLIDES] Données chargées:', {
+        currentSlides = Array.isArray(slidesRes.data) ? slidesRes.data : [];
+        currentLayouts = Array.isArray(layoutsRes.data) ? layoutsRes.data : [];
+        currentWidgets = Array.isArray(widgetsRes.data) ? widgetsRes.data : [];
+        
+        console.log('[SLIDES] Données chargées avec succès:', {
             slides: currentSlides.length,
             layouts: currentLayouts.length,
             widgets: currentWidgets.length
         });
         
-        renderSlidesList();
-        initSortable();
+        // Vérifier que currentSlides est un array avant le rendu
+        if (!Array.isArray(currentSlides)) {
+            console.error('[SLIDES] currentSlides n\'est pas un array:', currentSlides);
+            currentSlides = [];
+        }
+        
+        renderSlidesList(); // renderSlidesList appelle initSortable() à la fin
         
         // Sélectionner la première slide par défaut
         if (currentSlides.length > 0) {
@@ -72,17 +102,36 @@ async function loadInitialData() {
 }
 
 function setupEventListeners() {
-    // Boutons principaux
-    document.getElementById('btnAddSlide').addEventListener('click', openAddSlideModal);
-    document.getElementById('btnSaveSlide').addEventListener('click', saveSlide);
-    document.getElementById('btnDeleteSlide').addEventListener('click', deleteCurrentSlide);
-    document.getElementById('btnRefreshPreview').addEventListener('click', refreshPreview);
-    document.getElementById('btnFullscreenPreview').addEventListener('click', openFullscreenPreview);
-    document.getElementById('btnSaveWidgetConfig').addEventListener('click', saveWidgetConfig);
+    // Boutons principaux - avec protection contre les éléments manquants
+    const buttons = {
+        'btnAddSlide': openAddSlideModal,
+        'btnSaveSlide': saveSlide,
+        'btnDeleteSlide': deleteCurrentSlide,
+        'btnRefreshPreview': refreshPreview,
+        'btnFullscreenPreview': openFullscreenPreview,
+        'btnSaveWidgetConfig': saveWidgetConfig
+    };
+    
+    for (const [btnId, handler] of Object.entries(buttons)) {
+        const btn = document.getElementById(btnId);
+        if (btn) {
+            btn.addEventListener('click', handler);
+        } else {
+            console.warn(`[SLIDES] Bouton ${btnId} non trouvé dans le DOM`);
+        }
+    }
+    
+    console.log('[SLIDES] Event listeners configurés');
 }
 
 // ========== SLIDES LIST ==========
 function renderSlidesList() {
+    // Éviter les rendus concurrents
+    if (isRenderingSlides) {
+        console.warn('[SLIDES] Rendu déjà en cours, ignoré');
+        return;
+    }
+    
     const container = document.getElementById('slidesList');
     if (!container) {
         console.error('[SLIDES] Container slidesList introuvable');
@@ -99,69 +148,126 @@ function renderSlidesList() {
         return;
     }
     
+    isRenderingSlides = true;
+    
     try {
-        const items = currentSlides.map(slide => {
-            const isActive = slide.id === selectedSlideId;
-            const isInactive = !slide.actif;
-            const nom = safeEscape(slide.nom || 'Sans nom');
-            const layoutNom = slide.layout_nom || 'Gabarit';
-            const temps = slide.temps_affichage || 30;
-            const ordre = slide.ordre || '';
-            
-            return `
-                <div class="slide-item ${isInactive ? 'inactive' : ''} ${isActive ? 'active' : ''}" 
-                     data-slide-id="${slide.id}"
-                     onclick="selectSlide(${slide.id})">
-                    <div class="slide-item-handle">
-                        <i class="bi bi-grip-vertical"></i>
-                    </div>
-                    <div class="slide-item-order">${ordre}</div>
-                    <div class="slide-item-content">
-                        <div class="slide-item-title">${nom}</div>
-                        <div class="slide-item-meta">
-                            <span><i class="bi bi-grid-3x2"></i> ${layoutNom}</span>
-                            <span><i class="bi bi-clock"></i> ${temps}s</span>
+        const items = currentSlides.map((slide, index) => {
+            try {
+                if (!slide || typeof slide !== 'object') {
+                    console.warn('[SLIDES] Slide invalide a l\'index ' + index + ':', slide);
+                    return '';
+                }
+                
+                const isActive = slide.id === selectedSlideId;
+                const isInactive = !slide.actif;
+                const nom = safeEscape(slide.nom || 'Sans nom');
+                const layoutNom = slide.layout_nom || 'Gabarit';
+                const temps = slide.temps_affichage || 30;
+                const ordre = slide.ordre || '';
+                
+                return `
+                    <div class="slide-item ${isInactive ? 'inactive' : ''} ${isActive ? 'active' : ''}" 
+                         data-slide-id="${slide.id}"
+                         onclick="selectSlide(${slide.id})">
+                        <div class="slide-item-handle">
+                            <i class="bi bi-grip-vertical"></i>
+                        </div>
+                        <div class="slide-item-order">${ordre}</div>
+                        <div class="slide-item-content">
+                            <div class="slide-item-title">${nom}</div>
+                            <div class="slide-item-meta">
+                                <span><i class="bi bi-grid-3x2"></i> ${layoutNom}</span>
+                                <span><i class="bi bi-clock"></i> ${temps}s</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `;
+            } catch (slideError) {
+                console.error(`[SLIDES] Erreur rendering slide index ${index}:`, slideError, slide);
+                return '';
+            }
         });
         
-        container.innerHTML = items.join('');
+        const htmlContent = items.filter(item => item).join('');
+        container.innerHTML = htmlContent || '<div class="text-center text-muted p-4"><i class="bi bi-inbox"></i><p>Aucune slide valide</p></div>';
         
         console.log('[SLIDES] Liste rendue:', currentSlides.length, 'slides');
         
-        // Réinitialiser SortableJS après le rendu
-        if (sortableInstance) {
-            sortableInstance.destroy();
-        }
-        initSortable();
+        // Réinitialiser SortableJS après que le DOM soit complètement rendu
+        // Utiliser requestAnimationFrame pour s'assurer que innerHTML a fini de s'appliquer
+        requestAnimationFrame(() => {
+            if (sortableInstance) {
+                try {
+                    sortableInstance.destroy();
+                    sortableInstance = null;
+                } catch (e) {
+                    console.warn('[SLIDES] Erreur destruction Sortable:', e);
+                    sortableInstance = null;
+                }
+            }
+            initSortable();
+            // Libérer le flag après l'initialisation de Sortable
+            isRenderingSlides = false;
+        });
     } catch (e) {
-        console.error('[SLIDES] Erreur renderSlidesList:', e);
-        container.innerHTML = '<div class="alert alert-danger m-2">Erreur d\'affichage des slides</div>';
+        isRenderingSlides = false; // Libérer le flag en cas d'erreur
+        console.error('[SLIDES] Erreur renderSlidesList:', e, 'Stack:', e.stack);
+        console.error('[SLIDES] currentSlides:', currentSlides);
+        container.innerHTML = '<div class="alert alert-danger m-2"><strong>Erreur d\'affichage des slides:</strong><br/>' + e.message + '</div>';
     }
 }
 
 function initSortable() {
     const container = document.getElementById('slidesList');
     
-    // Vérifier qu'il y a des slides avant d'initialiser
-    if (!container || currentSlides.length === 0) {
+    // Vérifications de sécurité
+    if (!container) {
+        console.warn('[SLIDES] Container slidesList introuvable pour Sortable');
+        return;
+    }
+    
+    if (currentSlides.length === 0) {
+        console.log('[SLIDES] Aucune slide, Sortable non initialisé');
+        return;
+    }
+    
+    // Vérifier que le conteneur a effectivement des éléments .slide-item
+    const slideItems = container.querySelectorAll('.slide-item');
+    if (slideItems.length === 0) {
+        console.warn('[SLIDES] Aucun élément .slide-item trouvé dans le conteneur');
+        return;
+    }
+    
+    // Vérifier que SortableJS est chargé
+    if (typeof Sortable === 'undefined') {
+        console.warn('[SLIDES] SortableJS n\'est pas chargé. Drag/drop désactivé. Vérifiez le CDN jsdelivr.net');
         return;
     }
     
     // S'assurer qu'il n'y a pas déjà une instance
     if (sortableInstance) {
-        sortableInstance.destroy();
+        try {
+            sortableInstance.destroy();
+            sortableInstance = null;
+        } catch (e) {
+            console.warn('[SLIDES] Erreur destruction instance Sortable existante:', e);
+            sortableInstance = null;
+        }
     }
     
-    sortableInstance = Sortable.create(container, {
-        animation: 200,
-        handle: '.slide-item-handle',
-        ghostClass: 'sortable-ghost',
-        draggable: '.slide-item',
-        onEnd: handleReorder
-    });
+    try {
+        sortableInstance = Sortable.create(container, {
+            animation: 200,
+            handle: '.slide-item-handle',
+            ghostClass: 'sortable-ghost',
+            draggable: '.slide-item',
+            onEnd: handleReorder
+        });
+        console.log('[SLIDES] SortableJS initialisé avec succès sur', slideItems.length, 'slides');
+    } catch (error) {
+        console.error('[SLIDES] Erreur lors de l\'initialisation de Sortable:', error);
+        sortableInstance = null;
+    }
 }
 
 async function handleReorder(evt) {
