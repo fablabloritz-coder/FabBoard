@@ -220,22 +220,17 @@ class SyncWorker:
             return None, f"{source_type}: {str(e)}"
     
     def _fetch_caldav(self, url, credentials):
-        """Récupère les événements CalDAV."""
+        """Récupère les événements CalDAV (iCal format)."""
         try:
             user = credentials.get('user', '')
             password = credentials.get('pass', '')
             
             auth = (user, password) if user and password else None
             
-            resp = requests.get(url, auth=auth, timeout=4)
+            resp = requests.get(url, auth=auth, timeout=6)
             resp.raise_for_status()
             
-            # Parser iCal basique (simplifié)
-            events = []
-            lines = resp.text.split('\n')
-            for line in lines:
-                if line.startswith('SUMMARY:'):
-                    events.append({'summary': line.replace('SUMMARY:', '')})
+            events = self._parse_ical(resp.text)
             
             return {
                 'events': events,
@@ -243,6 +238,66 @@ class SyncWorker:
             }, ''
         except requests.RequestException as e:
             return None, f"CalDAV: {str(e)}"
+
+    @staticmethod
+    def _parse_ical(text):
+        """Parse un flux iCal et extrait les événements."""
+        events = []
+        current_event = None
+
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            # Gérer les lignes dépliées (continuation)
+            if raw_line.startswith((' ', '\t')) and current_event is not None:
+                # Continuation de la dernière propriété — ignorer pour simplifier
+                continue
+
+            if line == 'BEGIN:VEVENT':
+                current_event = {}
+            elif line == 'END:VEVENT':
+                if current_event is not None:
+                    # N'ajouter que si on a au moins un titre
+                    events.append({
+                        'titre': current_event.get('SUMMARY', 'Événement'),
+                        'description': current_event.get('DESCRIPTION', ''),
+                        'lieu': current_event.get('LOCATION', ''),
+                        'date_debut': SyncWorker._parse_ical_date(current_event.get('DTSTART', '')),
+                        'date_fin': SyncWorker._parse_ical_date(current_event.get('DTEND', '')),
+                        'uid': current_event.get('UID', ''),
+                    })
+                current_event = None
+            elif current_event is not None and ':' in line:
+                # Séparer la propriété (peut avoir des paramètres ;TZID=...)
+                prop_part, _, value = line.partition(':')
+                prop_name = prop_part.split(';')[0].upper()
+                if prop_name in ('SUMMARY', 'DESCRIPTION', 'LOCATION', 'DTSTART', 'DTEND', 'UID'):
+                    current_event[prop_name] = value
+
+        # Trier par date de début
+        events.sort(key=lambda e: e.get('date_debut') or '')
+
+        # Filtrer les événements passés (garder aujourd'hui + futur)
+        today = datetime.now().strftime('%Y-%m-%d')
+        future_events = [e for e in events if (e.get('date_debut') or '') >= today]
+
+        return future_events[:30]  # Limiter à 30 événements
+
+    @staticmethod
+    def _parse_ical_date(value):
+        """Convertit une date iCal (YYYYMMDD ou YYYYMMDDTHHmmSS) en ISO."""
+        if not value:
+            return ''
+        # Nettoyer Z et espaces
+        value = value.strip().replace('Z', '')
+        try:
+            if 'T' in value:
+                dt = datetime.strptime(value[:15], '%Y%m%dT%H%M%S')
+                return dt.isoformat()
+            else:
+                dt = datetime.strptime(value[:8], '%Y%m%d')
+                return dt.date().isoformat()
+        except (ValueError, IndexError):
+            return value
     
     def _fetch_openweathermap(self, url, credentials):
         """Récupère les données météo OpenWeatherMap."""

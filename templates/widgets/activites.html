@@ -27,8 +27,12 @@
     }
 
     function render(items, fabtrackError) {
-        if (fabtrackError) {
-            list.innerHTML = `<div style="color: #f87171; font-size: 0.8rem;">${esc(fabtrackError)}</div>`;
+        if (fabtrackError && !items.length) {
+            list.innerHTML = `<div style="text-align:center; padding:1.5rem; color:#64748b;">
+                <div style="font-size:2rem; margin-bottom:0.5rem;">📋</div>
+                <div>Fabtrack non connecté</div>
+                <small style="color:#475569;">Configurez l'URL dans Paramètres → Sources</small>
+            </div>`;
             return;
         }
 

@@ -44,8 +44,12 @@
     }
 
     function render(items, fabtrackError) {
-        if (fabtrackError) {
-            list.innerHTML = `<div style="color: #f87171; font-size: 0.8rem;">${esc(fabtrackError)}</div>`;
+        if (fabtrackError && !items.length) {
+            list.innerHTML = `<div style="text-align:center; padding:1.5rem; color:#64748b;">
+                <div style="font-size:2rem; margin-bottom:0.5rem;">💰</div>
+                <div>Fabtrack non connecté</div>
+                <small style="color:#475569;">Configurez l'URL dans Paramètres → Sources</small>
+            </div>`;
             return;
         }
 
@@ -57,11 +61,30 @@
         list.innerHTML = items.slice(0, maxItems).map(line).join('');
     }
 
+    const config = {{ config | tojson | safe }};
+    const sourceId = config.source_id || null;
+
     async function refresh() {
         try {
-            const resp = await fetch('/api/dashboard/data');
-            const data = await resp.json();
-            render(data.activites || [], data.fabtrack_error || '');
+            let items = [];
+            let errorMsg = '';
+
+            if (sourceId) {
+                const resp = await fetch('/api/widget-data/' + sourceId);
+                const result = await resp.json();
+                if (result.success && result.data) {
+                    items = result.data.consommations || [];
+                } else {
+                    errorMsg = result.error || 'Pas de données';
+                }
+            } else {
+                const resp = await fetch('/api/dashboard/data');
+                const data = await resp.json();
+                items = data.activites || [];
+                errorMsg = data.fabtrack_error || '';
+            }
+
+            render(items, errorMsg);
         } catch (error) {
             list.innerHTML = `<div style="color: #f87171;">Erreur: ${esc(error.message)}</div>`;
         }

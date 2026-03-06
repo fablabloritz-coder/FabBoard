@@ -1,9 +1,8 @@
 <div class="widget widget-imprimantes" id="widget-imprimantes-{{ widget_id }}" data-widget-code="imprimantes">
     <h3><i class="bi bi-printer"></i> Imprimantes 3D</h3>
     <div class="imprimantes-grid js-printers-grid">
-        <div style="color: #475569;">Aucune imprimante connectee.</div>
+        <div style="color: #475569;">Chargement...</div>
     </div>
-    <small style="color: #334155; font-size: 0.72rem; padding: 0 1.1rem 0.5rem; display: block;">Sources possibles: Repetier, PrusaLink, MQTT.</small>
 </div>
 
 <style>
@@ -42,9 +41,16 @@
         return 'text-bg-secondary';
     }
 
+    const config = {{ config | tojson | safe }};
+    const sourceId = config.source_id || null;
+
     function render(printers) {
         if (!printers.length) {
-            grid.innerHTML = '<div style="color: #475569;">Aucune donnee imprimante (phase 4).</div>';
+            grid.innerHTML = `<div style="text-align:center; padding:1.5rem; color:#64748b;">
+                <div style="font-size:2rem; margin-bottom:0.5rem;">🖨️</div>
+                <div>Aucune imprimante configurée</div>
+                <small style="color:#475569;">Ajoutez une source Repetier/PrusaLink dans Paramètres</small>
+            </div>`;
             return;
         }
 
@@ -59,9 +65,21 @@
 
     async function refresh() {
         try {
-            const resp = await fetch('/api/dashboard/data');
-            const data = await resp.json();
-            render(data.imprimantes || []);
+            let printers = [];
+
+            if (sourceId) {
+                const resp = await fetch('/api/widget-data/' + sourceId);
+                const result = await resp.json();
+                if (result.success && result.data) {
+                    printers = result.data.printers || [];
+                }
+            } else {
+                const resp = await fetch('/api/dashboard/data');
+                const data = await resp.json();
+                printers = data.imprimantes || [];
+            }
+
+            render(printers);
         } catch (error) {
             grid.innerHTML = `<div style="color: #f87171;">Erreur: ${esc(error.message)}</div>`;
         }

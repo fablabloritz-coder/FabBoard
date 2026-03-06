@@ -1,4 +1,4 @@
-<!-- Widget Météo : Affiche la météo depuis OpenWeatherMap API -->
+<!-- Widget Météo : Affiche la météo via Open-Meteo (gratuit, sans clé API) -->
 <div class="widget widget-meteo" data-widget-code="meteo" id="widget-meteo-{{ widget_id }}">
     <div class="meteo-container">
         <div class="meteo-loading" id="meteo-loading-{{ widget_id }}">
@@ -124,75 +124,63 @@
     const villeEl = document.getElementById('meteo-ville-' + widgetId);
     const detailsEl = document.getElementById('meteo-details-' + widgetId);
     
-    // Mapping des icônes météo
-    const weatherIcons = {
-        '01d': '☀️', '01n': '🌙',
-        '02d': '⛅', '02n': '☁️',
-        '03d': '☁️', '03n': '☁️',
-        '04d': '☁️', '04n': '☁️',
-        '09d': '🌧️', '09n': '🌧️',
-        '10d': '🌦️', '10n': '🌧️',
-        '11d': '⛈️', '11n': '⛈️',
-        '13d': '❄️', '13n': '❄️',
-        '50d': '🌫️', '50n': '🌫️'
-    };
+    function esc(v) {
+        const d = document.createElement('div');
+        d.textContent = v || '';
+        return d.innerHTML;
+    }
     
     async function fetchMeteo() {
         try {
-            // Source ID depuis config
-            const sourceId = config.source_id || 1;
+            // API Open-Meteo via le serveur (gratuit, sans clé API)
+            const ville = config.ville || 'Nancy, FR';
+            const resp = await fetch('/api/meteo?ville=' + encodeURIComponent(ville));
             
-            // Appeler l'API FabBoard qui récupère depuis le cache
-            const resp = await fetch('/api/widget-data/' + sourceId);
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.error || 'Erreur API');
+            }
             
-            if (!resp.ok) throw new Error('API error');
+            const result = await resp.json();
             
-            const data = await resp.json();
-            
-            if (data.success && data.data) {
-                const meteo = data.data;
+            if (result.success && result.data) {
+                const m = result.data;
                 
-                // Icône
-                const iconCode = meteo.weather?.[0]?.icon || '01d';
-                iconEl.textContent = weatherIcons[iconCode] || '🌤️';
+                iconEl.textContent = m.icon || '🌤️';
+                tempEl.textContent = m.temperature + '°C';
+                descEl.textContent = m.description || 'N/A';
+                villeEl.textContent = esc(m.ville + (m.pays ? ', ' + m.pays : ''));
+                detailsEl.innerHTML = '<span>💧 ' + esc(String(m.humidity)) + '%</span>'
+                    + '<span>💨 ' + esc(String(m.wind_speed)) + ' km/h</span>';
                 
-                // Température
-                const temp = Math.round(meteo.main?.temp || 0);
-                tempEl.textContent = temp + '°C';
-                
-                // Description
-                descEl.textContent = meteo.weather?.[0]?.description || 'N/A';
-                
-                // Ville
-                villeEl.textContent = meteo.name || config.ville || 'Ville';
-                
-                // Détails
-                const humidity = meteo.main?.humidity || 0;
-                const windSpeed = Math.round((meteo.wind?.speed || 0) * 3.6); // m/s → km/h
-                detailsEl.innerHTML = `
-                    <span>💧 ${humidity}%</span>
-                    <span>💨 ${windSpeed} km/h</span>
-                `;
-                
-                // Afficher
                 loadingEl.style.display = 'none';
                 contentEl.style.display = 'block';
                 errorEl.style.display = 'none';
             } else {
-                throw new Error('No data');
+                throw new Error('Pas de données');
             }
         } catch (error) {
             console.error('Erreur météo:', error);
             loadingEl.style.display = 'none';
             contentEl.style.display = 'none';
             errorEl.style.display = 'flex';
+            const errText = errorEl.querySelector('.error-text');
+            if (errText) errText.textContent = error.message || 'Météo indisponible';
         }
     }
     
     // Fetch initial
     fetchMeteo();
     
-    // Refresh toutes les 10 minutes
-    setInterval(fetchMeteo, 600000);
+    // Refresh via fabboard:refresh (toutes les 10s), mais météo seulement toutes les 5 min
+    let lastMeteoRefresh = Date.now();
+    document.addEventListener('fabboard:refresh', function() {
+        const root = document.getElementById('widget-meteo-' + widgetId);
+        if (!root || !root.isConnected) return;
+        if (Date.now() - lastMeteoRefresh > 300000) {
+            lastMeteoRefresh = Date.now();
+            fetchMeteo();
+        }
+    });
 })();
 </script>

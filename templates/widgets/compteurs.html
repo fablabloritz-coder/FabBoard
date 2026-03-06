@@ -2,11 +2,10 @@
     <h3><i class="bi bi-bar-chart"></i> Compteurs Fabtrack</h3>
     <div class="compteurs-grid js-compteurs-grid">
         <div class="compteur-item"><div class="compteur-value">--</div><div class="compteur-label">Interventions</div></div>
-        <div class="compteur-item"><div class="compteur-value">--</div><div class="compteur-label">Impression 3D (g)</div></div>
-        <div class="compteur-item"><div class="compteur-value">--</div><div class="compteur-label">Decoupe (m2)</div></div>
-        <div class="compteur-item"><div class="compteur-value">--</div><div class="compteur-label">Papier (feuilles)</div></div>
+        <div class="compteur-item"><div class="compteur-value">--</div><div class="compteur-label">Filament 3D</div></div>
+        <div class="compteur-item"><div class="compteur-value">--</div><div class="compteur-label">Surface découpe</div></div>
+        <div class="compteur-item"><div class="compteur-value">--</div><div class="compteur-label">Feuilles imprimées</div></div>
     </div>
-    <small class="js-source-note" style="color: #475569; font-size: 0.75rem; padding: 0 1.1rem 0.5rem;"></small>
 </div>
 
 <script>
@@ -15,28 +14,53 @@
     if (!root) return;
 
     const grid = root.querySelector('.js-compteurs-grid');
-    const note = root.querySelector('.js-source-note');
 
-    function n(v) {
+    function fmtInt(v) {
         if (v === null || v === undefined) return '0';
-        return Number(v).toLocaleString('fr-FR');
+        return Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 0 });
     }
 
-    function render(compteurs, sourceUrl, errorMsg) {
-        grid.innerHTML = `
-            <div class="compteur-item"><div class="compteur-value">${n(compteurs.interventions_total)}</div><div class="compteur-label">Interventions</div></div>
-            <div class="compteur-item"><div class="compteur-value">${n(compteurs.impression_3d_grammes)}</div><div class="compteur-label">Impression 3D (g)</div></div>
-            <div class="compteur-item"><div class="compteur-value">${n(compteurs.decoupe_m2)}</div><div class="compteur-label">Decoupe (m2)</div></div>
-            <div class="compteur-item"><div class="compteur-value">${n(compteurs.papier_feuilles)}</div><div class="compteur-label">Papier (feuilles)</div></div>
-        `;
+    function fmtKg(grammes) {
+        if (!grammes) return '0 kg';
+        const kg = grammes / 1000;
+        return kg.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg';
+    }
 
-        if (errorMsg) {
-            note.textContent = `Mode degrade: ${errorMsg}`;
-            note.style.color = '#f87171';
-        } else {
-            note.textContent = sourceUrl ? `Source: ${sourceUrl}` : '';
-            note.style.color = '#475569';
+    function fmtM2(m2) {
+        if (!m2) return '0 m²';
+        return Number(m2).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + ' m²';
+    }
+
+    function render(stats, errorMsg) {
+        if (errorMsg && !stats.total_interventions) {
+            grid.innerHTML = `
+                <div style="grid-column: 1/-1; text-align:center; padding:1.5rem; color:#64748b;">
+                    <div style="font-size:2rem; margin-bottom:0.5rem;">📊</div>
+                    <div>Fabtrack non connecté</div>
+                    <small style="color:#475569;">Configurez l'URL dans Paramètres → Sources</small>
+                </div>
+            `;
+            return;
         }
+        grid.innerHTML = `
+            <div class="compteur-item">
+                <div class="compteur-value">${fmtInt(stats.total_interventions)}</div>
+                <div class="compteur-label"><i class="bi bi-clipboard-check"></i> Interventions</div>
+            </div>
+            <div class="compteur-item">
+                <div class="compteur-value">${fmtKg(stats.total_3d_grammes)}</div>
+                <div class="compteur-label"><i class="bi bi-filetype-stl"></i> Filament 3D</div>
+            </div>
+            <div class="compteur-item">
+                <div class="compteur-value">${fmtM2(stats.total_decoupe_m2)}</div>
+                <div class="compteur-label"><i class="bi bi-scissors"></i> Surface découpe</div>
+            </div>
+            <div class="compteur-item">
+                <div class="compteur-value">${fmtInt(stats.total_papier_feuilles)}</div>
+                <div class="compteur-label"><i class="bi bi-file-earmark"></i> Feuilles imprimées</div>
+                <div class="compteur-sub">${fmtInt(stats.total_papier_couleur)} couleur · ${fmtInt(stats.total_papier_nb)} N&B</div>
+            </div>
+        `;
     }
 
     const config = {{ config | tojson | safe }};
@@ -44,37 +68,27 @@
 
     async function refresh() {
         try {
-            let compteurs = {};
-            let sourceUrl = '';
+            let stats = {};
             let errorMsg = '';
 
             if (sourceId) {
                 const resp = await fetch('/api/widget-data/' + sourceId);
                 const result = await resp.json();
                 if (result.success && result.data) {
-                    const s = result.data.summary || result.data;
-                    compteurs = {
-                        interventions_total: s.total_interventions || 0,
-                        impression_3d_grammes: s.total_3d_grammes || 0,
-                        decoupe_m2: s.total_decoupe_m2 || 0,
-                        papier_feuilles: s.total_papier_feuilles || 0,
-                    };
-                    sourceUrl = result.source_nom || '';
+                    stats = result.data.summary || result.data;
                 } else {
                     errorMsg = result.error || 'Pas de données';
                 }
             } else {
                 const resp = await fetch('/api/dashboard/data');
                 const data = await resp.json();
-                compteurs = data.compteurs || {};
-                sourceUrl = data.fabtrack_url || '';
+                stats = data.fabtrack_stats || {};
                 errorMsg = data.fabtrack_error || '';
             }
 
-            render(compteurs, sourceUrl, errorMsg);
+            render(stats, errorMsg);
         } catch (error) {
-            note.textContent = `Erreur: ${error.message}`;
-            note.style.color = '#f87171';
+            grid.innerHTML = `<div style="grid-column:1/-1; color:#f87171; text-align:center; padding:1rem;">Erreur: ${error.message}</div>`;
         }
     }
 

@@ -11,7 +11,7 @@ from models import (
     get_all_slides, get_slide_by_id, get_all_layouts, get_all_widgets_disponibles,
     get_theme, update_theme
 )
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import json
 import secrets
@@ -25,6 +25,9 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 PORT = int(os.environ.get('FABBOARD_PORT', 5580))
+
+# Cache mémoire pour météo Open-Meteo (pas besoin de clé API)
+_meteo_cache = {}  # {ville: {data, expires_at}}
 
 # ── Clé secrète : générée aléatoirement au premier lancement, persistée ──
 _SECRET_KEY_PATH = os.path.join(DATA_DIR, 'secret_key.txt')
@@ -65,7 +68,48 @@ def ensure_db():
     global _db_initialized
     if not _db_initialized:
         init_db()
+        _auto_bootstrap_sources()
         _db_initialized = True
+
+
+def _auto_bootstrap_sources():
+    """
+    Auto-détecte et crée automatiquement les sources connues au premier lancement.
+    Ne crée que si aucune source de ce type n'existe déjà.
+    """
+    db = get_db()
+    try:
+        # ── Auto-détection Fabtrack ──
+        existing_fabtrack = db.execute(
+            "SELECT COUNT(*) as n FROM sources WHERE type = 'fabtrack'"
+        ).fetchone()['n']
+
+        if existing_fabtrack == 0:
+            fabtrack_url = os.environ.get('FABTRACK_URL', 'http://localhost:5555').rstrip('/')
+            actif = 0  # Inactif par défaut
+
+            # Tester si Fabtrack est joignable
+            try:
+                resp = requests.get(f"{fabtrack_url}/api/stats/summary", timeout=3)
+                if resp.status_code == 200:
+                    actif = 1
+                    print(f'[Bootstrap] Fabtrack détecté à {fabtrack_url} ✓')
+                else:
+                    print(f'[Bootstrap] Fabtrack trouvé mais erreur HTTP {resp.status_code}')
+            except requests.RequestException:
+                print(f'[Bootstrap] Fabtrack non disponible à {fabtrack_url} — source créée inactive')
+
+            db.execute(
+                '''INSERT INTO sources (nom, type, url, credentials_json, sync_interval_sec, actif)
+                   VALUES (?, ?, ?, '{}', 30, ?)''',
+                ('Fabtrack', 'fabtrack', fabtrack_url, actif)
+            )
+            db.commit()
+
+    except Exception as e:
+        print(f'[Bootstrap] Erreur auto-détection: {e}')
+    finally:
+        db.close()
 
 
 # ============================================================
@@ -149,6 +193,10 @@ def _request_json(base_url, path, timeout=4):
         response = requests.get(url, timeout=timeout)
         response.raise_for_status()
         return True, response.json(), ''
+    except requests.ConnectionError:
+        return False, None, 'Service non disponible'
+    except requests.Timeout:
+        return False, None, 'Délai de réponse dépassé'
     except requests.RequestException as e:
         return False, None, str(e)
 
@@ -1177,6 +1225,124 @@ def api_get_widget_data(source_id):
         return jsonify({'error': str(e)}), 500
     finally:
         db.close()
+
+
+# ============================================================
+# API — MÉTÉO GRATUITE (Open-Meteo, sans clé API)
+# ============================================================
+
+@app.route('/api/meteo')
+def api_meteo():
+    """
+    Retourne la météo pour une ville via Open-Meteo (gratuit, sans clé API).
+    Params: ?ville=Nancy,FR  ou  ?lat=48.69&lon=6.18
+    """
+    ville = request.args.get('ville', '').strip()
+    lat = request.args.get('lat', '').strip()
+    lon = request.args.get('lon', '').strip()
+
+    if not ville and not (lat and lon):
+        return jsonify({'error': 'Paramètre ville ou lat/lon requis'}), 400
+
+    cache_key = ville or f"{lat},{lon}"
+    now = datetime.now()
+
+    # Vérifier le cache mémoire (15 minutes)
+    cached = _meteo_cache.get(cache_key)
+    if cached and cached['expires_at'] > now:
+        return jsonify({'success': True, 'data': cached['data'], 'cached': True})
+
+    try:
+        # Étape 1 : Géocodage si on a une ville
+        if ville and not (lat and lon):
+            city_name = ville.split(',')[0].strip()
+            geo_resp = requests.get(
+                'https://geocoding-api.open-meteo.com/v1/search',
+                params={'name': city_name, 'count': 1, 'language': 'fr'},
+                timeout=5
+            )
+            geo_resp.raise_for_status()
+            geo_data = geo_resp.json()
+            results = geo_data.get('results', [])
+            if not results:
+                return jsonify({'error': f'Ville non trouvée: {ville}'}), 404
+            lat = str(results[0]['latitude'])
+            lon = str(results[0]['longitude'])
+            resolved_name = results[0].get('name', city_name)
+            country = results[0].get('country', '')
+        else:
+            resolved_name = ville or 'Position'
+            country = ''
+
+        # Étape 2 : Météo actuelle via Open-Meteo
+        weather_resp = requests.get(
+            'https://api.open-meteo.com/v1/forecast',
+            params={
+                'latitude': lat,
+                'longitude': lon,
+                'current': 'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m',
+                'timezone': 'auto',
+            },
+            timeout=5
+        )
+        weather_resp.raise_for_status()
+        weather = weather_resp.json()
+
+        current = weather.get('current', {})
+
+        # Mapping WMO weather codes → description + icône emoji
+        wmo_code = current.get('weather_code', 0)
+        desc, icon = _wmo_to_description(wmo_code)
+
+        meteo_data = {
+            'temperature': round(current.get('temperature_2m', 0)),
+            'humidity': current.get('relative_humidity_2m', 0),
+            'wind_speed': round(current.get('wind_speed_10m', 0)),
+            'description': desc,
+            'icon': icon,
+            'ville': resolved_name,
+            'pays': country,
+        }
+
+        # Cacher 15 minutes
+        _meteo_cache[cache_key] = {
+            'data': meteo_data,
+            'expires_at': now + timedelta(minutes=15),
+        }
+
+        return jsonify({'success': True, 'data': meteo_data})
+
+    except requests.RequestException as e:
+        return jsonify({'error': f'Erreur météo: {str(e)}'}), 502
+
+
+def _wmo_to_description(code):
+    """Convertit un code météo WMO en description française et emoji."""
+    mapping = {
+        0: ('Ciel dégagé', '☀️'),
+        1: ('Peu nuageux', '🌤️'),
+        2: ('Partiellement nuageux', '⛅'),
+        3: ('Couvert', '☁️'),
+        45: ('Brouillard', '🌫️'),
+        48: ('Brouillard givrant', '🌫️'),
+        51: ('Bruine légère', '🌦️'),
+        53: ('Bruine modérée', '🌦️'),
+        55: ('Bruine forte', '🌧️'),
+        61: ('Pluie légère', '🌦️'),
+        63: ('Pluie modérée', '🌧️'),
+        65: ('Pluie forte', '🌧️'),
+        71: ('Neige légère', '🌨️'),
+        73: ('Neige modérée', '❄️'),
+        75: ('Neige forte', '❄️'),
+        80: ('Averses légères', '🌦️'),
+        81: ('Averses modérées', '🌧️'),
+        82: ('Averses violentes', '🌧️'),
+        85: ('Averses de neige', '🌨️'),
+        95: ('Orage', '⛈️'),
+        96: ('Orage avec grêle', '⛈️'),
+        99: ('Orage violent avec grêle', '⛈️'),
+    }
+    return mapping.get(code, ('Inconnu', '🌤️'))
 
 
 # ============================================================

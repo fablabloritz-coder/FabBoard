@@ -42,8 +42,12 @@
     }
 
     function render(machines, fabtrackError) {
-        if (fabtrackError) {
-            grid.innerHTML = `<div style="color: #f87171; font-size: 0.8rem;">${esc(fabtrackError)}</div>`;
+        if (fabtrackError && !machines.length) {
+            grid.innerHTML = `<div style="text-align:center; padding:1.5rem; color:#64748b;">
+                <div style="font-size:2rem; margin-bottom:0.5rem;">🔧</div>
+                <div>Fabtrack non connecté</div>
+                <small style="color:#475569;">Configurez l'URL dans Paramètres → Sources</small>
+            </div>`;
             return;
         }
 
@@ -61,11 +65,30 @@
         `).join('');
     }
 
+    const config = {{ config | tojson | safe }};
+    const sourceId = config.source_id || null;
+
     async function refresh() {
         try {
-            const resp = await fetch('/api/dashboard/data');
-            const data = await resp.json();
-            render(data.machines || [], data.fabtrack_error || '');
+            let machines = [];
+            let errorMsg = '';
+
+            if (sourceId) {
+                const resp = await fetch('/api/widget-data/' + sourceId);
+                const result = await resp.json();
+                if (result.success && result.data) {
+                    machines = result.data.machines || [];
+                } else {
+                    errorMsg = result.error || 'Pas de données';
+                }
+            } else {
+                const resp = await fetch('/api/dashboard/data');
+                const data = await resp.json();
+                machines = data.machines || [];
+                errorMsg = data.fabtrack_error || '';
+            }
+
+            render(machines, errorMsg);
         } catch (error) {
             grid.innerHTML = `<div style="color: #f87171;">Erreur: ${esc(error.message)}</div>`;
         }

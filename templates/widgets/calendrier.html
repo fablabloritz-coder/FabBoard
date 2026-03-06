@@ -1,9 +1,8 @@
 <div class="widget widget-calendrier" id="widget-calendrier-{{ widget_id }}" data-widget-code="calendrier">
-    <h3><i class="bi bi-calendar-event"></i> Evenements calendrier</h3>
+    <h3><i class="bi bi-calendar-event"></i> Événements calendrier</h3>
     <div class="calendrier-list js-cal-list">
-        <div style="color: #475569;">Aucun evenement pour le moment.</div>
+        <div style="color: #475569; padding: 1rem;">Chargement...</div>
     </div>
-    <small style="color: #334155; font-size: 0.72rem; padding: 0 1.1rem 0.5rem; display: block;">Tip: configurez une source `nextcloud_caldav` en phase 3.</small>
 </div>
 
 <script>
@@ -12,6 +11,16 @@
     if (!root) return;
 
     const list = root.querySelector('.js-cal-list');
+    const config = {{ config | tojson | safe }};
+    const sourceId = config.source_id || null;
+    const maxItems = config.nombre_max || 10;
+    const joursAvance = config.jours_avance || 7;
+    const tailleTexte = config.taille_texte || 'normal';
+    const tailleCartes = config.taille_cartes || 'normal';
+    const afficherDate = config.afficher_date_dessus !== false;
+
+    /* Apply size class to container */
+    root.classList.add('cal-text-' + tailleTexte, 'cal-card-' + tailleCartes);
 
     function esc(value) {
         const div = document.createElement('div');
@@ -19,37 +28,123 @@
         return div.innerHTML;
     }
 
-    function fmtDate(value) {
-        if (!value) return '--';
+    function toDate(value) {
+        if (!value) return null;
         const dt = new Date(value.replace(' ', 'T'));
-        if (Number.isNaN(dt.getTime())) return value;
-        return dt.toLocaleString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        return Number.isNaN(dt.getTime()) ? null : dt;
+    }
+
+    function fmtDayHeader(dt) {
+        return dt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    }
+
+    function fmtTime(dt) {
+        return dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function isAllDay(evt) {
+        if (evt.all_day) return true;
+        const s = toDate(evt.date_debut || evt.start);
+        const e = toDate(evt.date_fin || evt.end);
+        if (!s || !e) return false;
+        return (e - s) >= 86400000 && s.getHours() === 0 && s.getMinutes() === 0;
+    }
+
+    function dayKey(dt) {
+        return dt.toISOString().slice(0, 10);
+    }
+
+    function filterByDays(events) {
+        const now = new Date();
+        const limit = new Date(now);
+        limit.setDate(limit.getDate() + joursAvance);
+        return events.filter(evt => {
+            const dt = toDate(evt.date_debut || evt.start);
+            return dt && dt >= new Date(now.toDateString()) && dt <= limit;
+        });
     }
 
     function render(events) {
         if (!events.length) {
-            list.innerHTML = '<div style="color: #475569;">Aucun evenement synchronise.</div>';
+            list.innerHTML = `
+                <div style="text-align:center; padding:2rem; color:#64748b;">
+                    <div style="font-size:2.5rem; margin-bottom:0.5rem;">📅</div>
+                    <div>Aucun événement à venir</div>
+                </div>
+            `;
             return;
         }
 
-        list.innerHTML = events.slice(0, 6).map((evt) => `
-            <div class="activite-item">
-                <div class="activite-titre">${esc(evt.titre || 'Evenement')}</div>
-                <div class="activite-meta">
-                    <span class="badge" style="background:#1e293b; color:#94a3b8;">${esc(fmtDate(evt.date_debut || evt.start || ''))}</span>
-                    <span>${esc(evt.lieu || evt.location || '')}</span></span>
+        /* Filter by days range */
+        let filtered = filterByDays(events);
+        filtered = filtered.slice(0, maxItems);
+
+        if (!filtered.length) {
+            list.innerHTML = `
+                <div style="text-align:center; padding:2rem; color:#64748b;">
+                    <div style="font-size:2.5rem; margin-bottom:0.5rem;">📅</div>
+                    <div>Aucun événement dans les ${joursAvance} prochains jours</div>
                 </div>
-            </div>
-        `).join('');
+            `;
+            return;
+        }
+
+        /* Group by day */
+        const groups = new Map();
+        filtered.forEach(evt => {
+            const dt = toDate(evt.date_debut || evt.start);
+            const key = dt ? dayKey(dt) : 'unknown';
+            if (!groups.has(key)) groups.set(key, { date: dt, events: [] });
+            groups.get(key).events.push(evt);
+        });
+
+        let html = '';
+        groups.forEach((group) => {
+            if (afficherDate && group.date) {
+                html += `<div class="cal-day-header">${esc(fmtDayHeader(group.date))}</div>`;
+            }
+            group.events.forEach(evt => {
+                const dt = toDate(evt.date_debut || evt.start);
+                const allDay = isAllDay(evt);
+                const timeStr = allDay ? 'Toute la journée' : (dt ? fmtTime(dt) : '');
+                const lieu = evt.lieu || evt.location || '';
+                const titre = evt.titre || evt.summary || 'Événement';
+
+                html += `
+                    <div class="cal-event-card">
+                        <div class="cal-event-time">
+                            <i class="bi bi-${allDay ? 'calendar-check' : 'clock'}"></i>
+                            ${esc(timeStr)}
+                        </div>
+                        <div class="cal-event-title">${esc(titre)}</div>
+                        ${lieu ? `<div class="cal-event-location"><i class="bi bi-geo-alt"></i> ${esc(lieu)}</div>` : ''}
+                    </div>
+                `;
+            });
+        });
+
+        list.innerHTML = html;
     }
 
     async function refresh() {
         try {
-            const resp = await fetch('/api/dashboard/data');
-            const data = await resp.json();
-            render(data.evenements || []);
+            let events = [];
+
+            if (sourceId) {
+                const resp = await fetch('/api/widget-data/' + sourceId);
+                const result = await resp.json();
+                if (result.success && result.data) {
+                    events = result.data.events || [];
+                }
+            } else {
+                const resp = await fetch('/api/dashboard/data');
+                const data = await resp.json();
+                events = data.evenements || [];
+            }
+
+            render(events);
         } catch (error) {
-            list.innerHTML = `<div style="color: #f87171;">Erreur: ${esc(error.message)}</div>`;
+            list.innerHTML = `<div style="color: #f87171; padding:1rem;">Erreur: ${esc(error.message)}</div>`;
         }
     }
 

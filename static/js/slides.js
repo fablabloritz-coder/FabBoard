@@ -774,7 +774,7 @@ const WIDGET_CONFIG_DEFINITIONS = {
         titre: 'Texte libre',
         fields: [
             { key: 'titre', label: 'Titre', type: 'text', default: 'Information', placeholder: 'Titre du bloc' },
-            { key: 'texte', label: 'Contenu', type: 'textarea', default: '', placeholder: 'Texte à afficher...' },
+            { key: 'contenu', label: 'Contenu', type: 'textarea', default: '', placeholder: 'Texte à afficher...' },
             { key: 'taille_texte', label: 'Taille du texte', type: 'select', options: [
                 { value: 'small', label: 'Petit' },
                 { value: 'normal', label: 'Normal' },
@@ -791,6 +791,7 @@ const WIDGET_CONFIG_DEFINITIONS = {
     compteurs: {
         titre: 'Compteurs Fabtrack',
         fields: [
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
             { key: 'afficher_en_attente', label: 'Afficher "À faire"', type: 'checkbox', default: true },
             { key: 'afficher_en_cours', label: 'Afficher "En cours"', type: 'checkbox', default: true },
             { key: 'afficher_termines', label: 'Afficher "Terminées"', type: 'checkbox', default: true }
@@ -799,6 +800,7 @@ const WIDGET_CONFIG_DEFINITIONS = {
     activites: {
         titre: 'Activités Fabtrack',
         fields: [
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
             { key: 'nombre_max', label: "Nombre max d'activités", type: 'number', default: 5, min: 1, max: 20 },
             { key: 'filtre_urgence', label: 'Filtrer par urgence', type: 'select', options: [
                 { value: '', label: 'Toutes' },
@@ -811,14 +813,29 @@ const WIDGET_CONFIG_DEFINITIONS = {
     calendrier: {
         titre: 'Événements calendrier',
         fields: [
-            { key: 'nombre_max', label: "Nombre max d'événements", type: 'number', default: 5, min: 1, max: 15 },
-            { key: 'jours_avance', label: "Jours à l'avance", type: 'number', default: 7, min: 1, max: 30 }
+            { key: 'source_id', label: 'Source CalDAV', type: 'source_select', source_type: 'nextcloud_caldav', default: '' },
+            { key: 'nombre_max', label: "Nombre max d'événements", type: 'number', default: 10, min: 1, max: 30 },
+            { key: 'jours_avance', label: "Jours à l'avance", type: 'number', default: 7, min: 1, max: 60 },
+            { key: 'taille_texte', label: 'Taille du texte', type: 'select', options: [
+                { value: 'small', label: 'Petit' },
+                { value: 'normal', label: 'Normal' },
+                { value: 'large', label: 'Grand' },
+                { value: 'xlarge', label: 'Très grand' }
+            ], default: 'normal' },
+            { key: 'taille_cartes', label: 'Taille des cartes', type: 'select', options: [
+                { value: 'compact', label: 'Compact' },
+                { value: 'normal', label: 'Normal' },
+                { value: 'large', label: 'Grand' },
+                { value: 'xlarge', label: 'Très grand' }
+            ], default: 'normal' },
+            { key: 'afficher_date_dessus', label: 'Afficher la date au-dessus', type: 'checkbox', default: true }
         ]
     },
     meteo: {
         titre: 'Météo',
         fields: [
-            { key: 'ville', label: 'Ville', type: 'text', default: '', placeholder: 'Ex: Nancy, FR' },
+            { key: 'source_id', label: 'Source OpenWeatherMap', type: 'source_select', source_type: 'openweathermap', default: '' },
+            { key: 'ville', label: 'Ville (override)', type: 'text', default: '', placeholder: 'Ex: Nancy, FR' },
             { key: 'unite', label: 'Unité', type: 'select', options: [
                 { value: 'celsius', label: 'Celsius (°C)' },
                 { value: 'fahrenheit', label: 'Fahrenheit (°F)' }
@@ -828,6 +845,7 @@ const WIDGET_CONFIG_DEFINITIONS = {
     fabtrack_stats: {
         titre: 'Stats Fabtrack',
         fields: [
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
             { key: 'periode', label: 'Période', type: 'select', options: [
                 { value: 'jour', label: "Aujourd'hui" },
                 { value: 'semaine', label: 'Cette semaine' },
@@ -838,18 +856,21 @@ const WIDGET_CONFIG_DEFINITIONS = {
     fabtrack_machines: {
         titre: 'État machines',
         fields: [
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
             { key: 'afficher_inactives', label: 'Afficher les machines inactives', type: 'checkbox', default: false }
         ]
     },
     fabtrack_conso: {
         titre: 'Dernières consommations',
         fields: [
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
             { key: 'nombre_max', label: 'Nombre max', type: 'number', default: 5, min: 1, max: 20 }
         ]
     },
     imprimantes: {
         titre: 'Imprimantes 3D',
         fields: [
+            { key: 'source_id', label: 'Source imprimantes', type: 'source_select', source_type: 'repetier', default: '' },
             { key: 'afficher_inactives', label: 'Afficher les imprimantes hors-ligne', type: 'checkbox', default: false }
         ]
     }
@@ -880,9 +901,11 @@ function configureWidget(slideId, position) {
     // Stocker le contexte d'édition
     currentEditingWidgetConfig = { slideId, position, widgetCode };
     
-    // Construire le formulaire
+    // Construire le formulaire (async pour source_select)
     const formEl = document.getElementById('widgetConfigForm');
-    formEl.innerHTML = buildWidgetConfigForm(configDef, currentConfig);
+    buildWidgetConfigFormAsync(configDef, currentConfig).then(html => {
+        formEl.innerHTML = html;
+    });
     
     // Mettre à jour le titre du modal
     const modalTitle = document.querySelector('#widgetConfigModal .modal-title');
@@ -893,60 +916,107 @@ function configureWidget(slideId, position) {
     modal.show();
 }
 
+async function buildWidgetConfigFormAsync(configDef, currentConfig) {
+    // Pre-fetch sources for source_select fields
+    const sourceTypes = new Set();
+    configDef.fields.forEach(f => {
+        if (f.type === 'source_select' && f.source_type) {
+            sourceTypes.add(f.source_type);
+        }
+    });
+    
+    const sourcesCache = {};
+    for (const st of sourceTypes) {
+        try {
+            const resp = await apiCall('/api/sources/by-type/' + st);
+            sourcesCache[st] = resp.data || [];
+        } catch (e) {
+            sourcesCache[st] = [];
+        }
+    }
+    
+    return configDef.fields.map(field => {
+        const value = currentConfig[field.key] !== undefined ? currentConfig[field.key] : field.default;
+        return buildFieldHtml(field, value, sourcesCache);
+    }).join('');
+}
+
+function buildFieldHtml(field, value, sourcesCache) {
+    switch (field.type) {
+        case 'source_select': {
+            const sources = (sourcesCache || {})[field.source_type] || [];
+            let optionsHtml = '<option value="">Auto (par défaut)</option>';
+            sources.forEach(function(src) {
+                const sel = String(value) === String(src.id) ? ' selected' : '';
+                const status = src.derniere_erreur ? ' ⚠️' : (src.derniere_sync ? ' ✓' : '');
+                const activeLabel = src.actif ? '' : ' (inactive)';
+                optionsHtml += '<option value="' + src.id + '"' + sel + '>'
+                    + escapeHtml(src.nom) + activeLabel + status + '</option>';
+            });
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<select class="form-select" data-config-key="' + field.key + '">' +
+                optionsHtml +
+                '</select>' +
+                '<small class="form-text text-muted">Sélectionnez une source configurée dans Paramètres.</small>' +
+                '</div>';
+        }
+
+        case 'text':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<input type="text" class="form-control" data-config-key="' + field.key + '" ' +
+                'value="' + escapeHtml(String(value || '')) + '" ' +
+                'placeholder="' + escapeHtml(field.placeholder || '') + '">' +
+                '</div>';
+
+        case 'number':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<input type="number" class="form-control" data-config-key="' + field.key + '" ' +
+                'value="' + value + '" ' +
+                (field.min !== undefined ? 'min="' + field.min + '" ' : '') +
+                (field.max !== undefined ? 'max="' + field.max + '" ' : '') + '>' +
+                '</div>';
+
+        case 'textarea':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<textarea class="form-control" data-config-key="' + field.key + '" rows="4" ' +
+                'placeholder="' + escapeHtml(field.placeholder || '') + '">' +
+                escapeHtml(String(value || '')) + '</textarea>' +
+                '</div>';
+
+        case 'select':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<select class="form-select" data-config-key="' + field.key + '">' +
+                field.options.map(function(opt) {
+                    return '<option value="' + escapeHtml(opt.value) + '"' +
+                        (String(value) === String(opt.value) ? ' selected' : '') + '>' +
+                        escapeHtml(opt.label) + '</option>';
+                }).join('') +
+                '</select>' +
+                '</div>';
+
+        case 'checkbox':
+            return '<div class="mb-3">' +
+                '<div class="form-check form-switch">' +
+                '<input class="form-check-input" type="checkbox" data-config-key="' + field.key + '" ' +
+                (value ? 'checked' : '') + '>' +
+                '<label class="form-check-label">' + escapeHtml(field.label) + '</label>' +
+                '</div>' +
+                '</div>';
+
+        default:
+            return '';
+    }
+}
+
 function buildWidgetConfigForm(configDef, currentConfig) {
     return configDef.fields.map(field => {
         const value = currentConfig[field.key] !== undefined ? currentConfig[field.key] : field.default;
-        
-        switch (field.type) {
-            case 'text':
-                return '<div class="mb-3">' +
-                    '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
-                    '<input type="text" class="form-control" data-config-key="' + field.key + '" ' +
-                    'value="' + escapeHtml(String(value || '')) + '" ' +
-                    'placeholder="' + escapeHtml(field.placeholder || '') + '">' +
-                    '</div>';
-            
-            case 'number':
-                return '<div class="mb-3">' +
-                    '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
-                    '<input type="number" class="form-control" data-config-key="' + field.key + '" ' +
-                    'value="' + value + '" ' +
-                    (field.min !== undefined ? 'min="' + field.min + '" ' : '') +
-                    (field.max !== undefined ? 'max="' + field.max + '" ' : '') + '>' +
-                    '</div>';
-            
-            case 'textarea':
-                return '<div class="mb-3">' +
-                    '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
-                    '<textarea class="form-control" data-config-key="' + field.key + '" rows="4" ' +
-                    'placeholder="' + escapeHtml(field.placeholder || '') + '">' +
-                    escapeHtml(String(value || '')) + '</textarea>' +
-                    '</div>';
-            
-            case 'select':
-                return '<div class="mb-3">' +
-                    '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
-                    '<select class="form-select" data-config-key="' + field.key + '">' +
-                    field.options.map(function(opt) {
-                        return '<option value="' + escapeHtml(opt.value) + '"' +
-                            (String(value) === String(opt.value) ? ' selected' : '') + '>' +
-                            escapeHtml(opt.label) + '</option>';
-                    }).join('') +
-                    '</select>' +
-                    '</div>';
-            
-            case 'checkbox':
-                return '<div class="mb-3">' +
-                    '<div class="form-check form-switch">' +
-                    '<input class="form-check-input" type="checkbox" data-config-key="' + field.key + '" ' +
-                    (value ? 'checked' : '') + '>' +
-                    '<label class="form-check-label">' + escapeHtml(field.label) + '</label>' +
-                    '</div>' +
-                    '</div>';
-            
-            default:
-                return '';
-        }
+        return buildFieldHtml(field, value, {});
     }).join('');
 }
 
@@ -971,6 +1041,9 @@ async function saveWidgetAdvancedConfig() {
                 break;
             case 'number':
                 newConfig[field.key] = parseInt(input.value) || field.default;
+                break;
+            case 'source_select':
+                newConfig[field.key] = input.value ? parseInt(input.value) : null;
                 break;
             default:
                 newConfig[field.key] = input.value;
