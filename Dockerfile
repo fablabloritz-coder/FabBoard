@@ -1,27 +1,26 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 LABEL maintainer="Fablab Loritz"
 LABEL description="FabBoard - Dashboard TV pour Fablab"
 
-# Variables d'environnement
-ENV PYTHONUNBUFFERED=1
-ENV FABBOARD_PORT=5580
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
-# Répertoire de travail
 WORKDIR /app
 
-# Copier les dépendances et les installer
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN addgroup --system app && adduser --system --ingroup app app
 
-# Copier le code source
-COPY . .
+COPY requirements.txt /app/requirements.txt
+RUN pip install -r /app/requirements.txt
 
-# Créer le dossier de données
-RUN mkdir -p /app/data
+COPY . /app
 
-# Exposer le port
+RUN mkdir -p /app/data \
+    && chown -R app:app /app
+
+USER app
+
 EXPOSE 5580
 
-# Commande de démarrage
-CMD ["python", "app.py"]
+CMD ["waitress-serve", "--listen=0.0.0.0:5580", "app:app"]

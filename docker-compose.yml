@@ -1,0 +1,17 @@
+services:
+  fabboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fabboard:latest
+    container_name: fabboard
+    restart: unless-stopped
+    ports:
+      - "5580:5580"
+    environment:
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-}
+      TZ: ${TZ:-Europe/Paris}
+      # URL Fabtrack pour interconnexion Phase 2 (adapter l'IP/hostname du serveur)
+      FABTRACK_URL: ${FABTRACK_URL:-http://host.docker.internal:5555}
+    volumes:
+      - ${FABBOARD_DATA_PATH:-./docker-data/data}:/app/data

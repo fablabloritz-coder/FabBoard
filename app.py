@@ -13,13 +13,34 @@ from models import (
 from datetime import datetime
 import os
 import json
+import secrets
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('FABBOARD_SECRET', 'fabboard-secret-2026')
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, 'data')
 PORT = int(os.environ.get('FABBOARD_PORT', 5580))
+
+# ── Clé secrète : générée aléatoirement au premier lancement, persistée ──
+_SECRET_KEY_PATH = os.path.join(DATA_DIR, 'secret_key.txt')
+
+
+def _load_or_generate_secret_key():
+    """Charge la clé secrète depuis le fichier, ou en génère une nouvelle."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    if os.path.exists(_SECRET_KEY_PATH):
+        with open(_SECRET_KEY_PATH, 'r', encoding='utf-8') as f:
+            key = f.read().strip()
+            if len(key) >= 32:
+                return key
+    key = secrets.token_hex(32)
+    with open(_SECRET_KEY_PATH, 'w', encoding='utf-8') as f:
+        f.write(key)
+    return key
+
+
+app.secret_key = os.environ.get('FLASK_SECRET_KEY') or _load_or_generate_secret_key()
 
 
 # ============================================================
