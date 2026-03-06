@@ -534,6 +534,109 @@
     animation: fadeIn 0.3s ease reverse;
 }
 
+/* ========== ÉCHELLE GLOBALE DES WIDGETS ========== */
+.dashboard-widget.widget-scale-1   { font-size: 1rem; }
+.dashboard-widget.widget-scale-1-25 { font-size: 1.25rem; }
+.dashboard-widget.widget-scale-1-5 { font-size: 1.5rem; }
+.dashboard-widget.widget-scale-2   { font-size: 2rem; }
+.dashboard-widget.widget-scale-2-5 { font-size: 2.5rem; }
+.dashboard-widget.widget-scale-3   { font-size: 3rem; }
+
+.dashboard-widget[class*="widget-scale-"] h3 { font-size: 0.55em; }
+.dashboard-widget[class*="widget-scale-"] .compteur-value { font-size: 1.7em; }
+.dashboard-widget[class*="widget-scale-"] .compteur-label { font-size: 0.5em; }
+.dashboard-widget[class*="widget-scale-"] .activite-titre { font-size: 0.6em; }
+.dashboard-widget[class*="widget-scale-"] .activite-meta { font-size: 0.5em; }
+.dashboard-widget[class*="widget-scale-"] .machine-name { font-size: 0.55em; }
+.dashboard-widget[class*="widget-scale-"] .printer-name { font-size: 0.55em; }
+.dashboard-widget[class*="widget-scale-"] .cal-day-header { font-size: 0.6em; }
+.dashboard-widget[class*="widget-scale-"] .cal-event-title { font-size: 0.6em; }
+.dashboard-widget[class*="widget-scale-"] .cal-event-time { font-size: 0.5em; }
+.dashboard-widget[class*="widget-scale-"] .cal-event-location { font-size: 0.45em; }
+.dashboard-widget[class*="widget-scale-"] .badge { font-size: 0.45em; }
+.dashboard-widget[class*="widget-scale-"] .widget-empty p,
+.dashboard-widget[class*="widget-scale-"] .widget-error p { font-size: 0.55em; }
+.dashboard-widget[class*="widget-scale-"] .widget-empty small,
+.dashboard-widget[class*="widget-scale-"] .widget-error small { font-size: 0.45em; }
+.dashboard-widget[class*="widget-scale-"] .horloge-heure { font-size: 1em !important; }
+.dashboard-widget[class*="widget-scale-"] .horloge-date { font-size: 0.4em !important; }
+
+/* ========== POLICES PERSONNALISÉES ========== */
+.dashboard-tv.font-inter { font-family: 'Inter', sans-serif; }
+.dashboard-tv.font-roboto { font-family: 'Roboto', sans-serif; }
+.dashboard-tv.font-poppins { font-family: 'Poppins', sans-serif; }
+.dashboard-tv.font-montserrat { font-family: 'Montserrat', sans-serif; }
+.dashboard-tv.font-opensans { font-family: 'Open Sans', sans-serif; }
+.dashboard-tv.font-sourcesans { font-family: 'Source Sans 3', sans-serif; }
+.dashboard-tv.font-orbitron { font-family: 'Orbitron', sans-serif; }
+.dashboard-tv.font-rajdhani { font-family: 'Rajdhani', sans-serif; }
+
+/* ========== URGENCE CALENDRIER ========== */
+.cal-event-card.cal-urgence-critique {
+    border-left-color: #ef4444;
+    background: linear-gradient(90deg, rgba(239,68,68,0.08) 0%, #0f172a 30%);
+}
+.cal-event-card.cal-urgence-proche {
+    border-left-color: #f97316;
+    background: linear-gradient(90deg, rgba(249,115,22,0.07) 0%, #0f172a 30%);
+}
+.cal-event-card.cal-urgence-moyen {
+    border-left-color: #eab308;
+    background: linear-gradient(90deg, rgba(234,179,8,0.05) 0%, #0f172a 30%);
+}
+.cal-event-card.cal-urgence-loin {
+    border-left-color: #22c55e;
+}
+
+.cal-urgence-badge {
+    display: inline-block;
+    font-size: 0.65em;
+    font-weight: 600;
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    margin-left: 0.5em;
+    vertical-align: middle;
+}
+.cal-urgence-badge.critique { background: rgba(239,68,68,0.2); color: #f87171; }
+.cal-urgence-badge.proche { background: rgba(249,115,22,0.2); color: #fb923c; }
+.cal-urgence-badge.moyen { background: rgba(234,179,8,0.15); color: #fbbf24; }
+.cal-urgence-badge.loin { background: rgba(34,197,94,0.15); color: #4ade80; }
+
+/* ========== WIDGET IMAGE ========== */
+.widget-image {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 0;
+}
+.widget-image img {
+    max-width: 100%;
+    max-height: 100%;
+}
+.widget-image.fit-contain img { object-fit: contain; width: 100%; height: 100%; }
+.widget-image.fit-cover img { object-fit: cover; width: 100%; height: 100%; }
+.widget-image.fit-fill img { object-fit: fill; width: 100%; height: 100%; }
+.widget-image.with-title {
+    flex-direction: column;
+}
+.widget-image.with-title img {
+    flex: 1;
+    min-height: 0;
+}
+
+/* ========== FOND DE SLIDE ========== */
+.dashboard-full.slide-bg-color {
+    background-size: cover;
+    background-position: center;
+}
+.dashboard-full.slide-bg-image {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
     .slide-indicator {

@@ -38,6 +38,7 @@ async function loadParametres() {
         document.getElementById('param-fablab-name').value = params.fablab_name || "Loritz'Lab";
         document.getElementById('param-refresh').value = params.refresh_interval || 30;
         document.getElementById('param-theme').value = params.theme || 'dark';
+        document.getElementById('param-police').value = params.police_dashboard || 'inter';
     } catch (error) {
         console.error('Erreur chargement paramètres:', error);
     }
@@ -48,6 +49,7 @@ async function saveParametres() {
         fablab_name: document.getElementById('param-fablab-name').value.trim(),
         refresh_interval: document.getElementById('param-refresh').value,
         theme: document.getElementById('param-theme').value,
+        police_dashboard: document.getElementById('param-police').value,
     };
 
     if (!params.fablab_name) {
@@ -68,6 +70,10 @@ async function saveParametres() {
             apiCall('/api/parametres/theme', {
                 method: 'PUT',
                 body: JSON.stringify({ valeur: params.theme }),
+            }),
+            apiCall('/api/parametres/police_dashboard', {
+                method: 'PUT',
+                body: JSON.stringify({ valeur: params.police_dashboard }),
             }),
         ]);
 

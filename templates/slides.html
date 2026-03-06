@@ -114,6 +114,27 @@
                             </label>
                         </div>
                     </div>
+
+                    <hr>
+                    <h6 class="mb-3"><i class="bi bi-palette"></i> Fond de la slide</h6>
+                    <div class="mb-3">
+                        <label for="slideFondType" class="form-label">Type de fond</label>
+                        <select class="form-select" id="slideFondType" onchange="toggleFondOptions()">
+                            <option value="defaut">Par défaut (thème)</option>
+                            <option value="couleur">Couleur personnalisée</option>
+                            <option value="image">Image personnalisée</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="fondCouleurGroup" style="display:none;">
+                        <label for="slideFondCouleur" class="form-label">Couleur de fond</label>
+                        <input type="color" class="form-control form-control-color w-100" id="slideFondCouleur" value="#0b1120">
+                    </div>
+                    <div class="mb-3" id="fondImageGroup" style="display:none;">
+                        <label class="form-label">Image de fond</label>
+                        <input type="hidden" id="slideFondImage" value="">
+                        <div id="fondImagePreview" class="mb-2"></div>
+                        <input type="file" class="form-control" id="slideFondImageFile" accept="image/*" onchange="uploadSlideBg(this)">
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">

@@ -6,8 +6,9 @@ Phase 1.5 : Système de slides configurable
 
 from flask import Flask, render_template, request, jsonify, send_file
 from jinja2 import TemplateNotFound
+from werkzeug.utils import secure_filename
 from models import (
-    get_db, init_db,
+    get_db, init_db, migrate_db,
     get_all_slides, get_slide_by_id, get_all_layouts, get_all_widgets_disponibles,
     get_theme, update_theme
 )
@@ -24,6 +25,9 @@ app = Flask(__name__)
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
+UPLOAD_DIR = os.path.join(BASE_DIR, 'static', 'uploads')
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
 PORT = int(os.environ.get('FABBOARD_PORT', 5580))
 
 # Cache mémoire pour météo Open-Meteo (pas besoin de clé API)
@@ -68,6 +72,7 @@ def ensure_db():
     global _db_initialized
     if not _db_initialized:
         init_db()
+        migrate_db()
         _auto_bootstrap_sources()
         _db_initialized = True
 
@@ -986,14 +991,16 @@ def api_create_slide():
         ordre = (max_ordre or 0) + 1
         
         cursor = db.execute('''
-            INSERT INTO slides (nom, layout_id, ordre, temps_affichage, actif)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO slides (nom, layout_id, ordre, temps_affichage, actif, fond_type, fond_valeur)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (
             data['nom'],
             data['layout_id'],
             ordre,
             data.get('temps_affichage', 30),
-            data.get('actif', 1)
+            data.get('actif', 1),
+            data.get('fond_type', 'defaut'),
+            data.get('fond_valeur', '')
         ))
         
         slide_id = cursor.lastrowid
@@ -1038,6 +1045,7 @@ def api_update_slide(id):
         db.execute('''
             UPDATE slides SET
                 nom = ?, layout_id = ?, temps_affichage = ?, actif = ?,
+                fond_type = ?, fond_valeur = ?,
                 updated_at = datetime('now','localtime')
             WHERE id = ?
         ''', (
@@ -1045,6 +1053,8 @@ def api_update_slide(id):
             data.get('layout_id', existing['layout_id']),
             data.get('temps_affichage', existing['temps_affichage']),
             data.get('actif', existing['actif']),
+            data.get('fond_type', existing['fond_type'] or 'defaut'),
+            data.get('fond_valeur', existing['fond_valeur'] or ''),
             id
         ))
         
@@ -1225,6 +1235,36 @@ def api_get_widget_data(source_id):
         return jsonify({'error': str(e)}), 500
     finally:
         db.close()
+
+
+# ============================================================
+# API — UPLOAD D'IMAGES
+# ============================================================
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/api/upload', methods=['POST'])
+def api_upload():
+    """Upload une image pour les widgets ou les fonds de slide."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'Aucun fichier envoyé'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'Nom de fichier vide'}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Type de fichier non autorisé. Extensions acceptées : ' + ', '.join(ALLOWED_EXTENSIONS)}), 400
+
+    # Nom unique pour éviter les collisions
+    ext = secure_filename(file.filename).rsplit('.', 1)[1].lower()
+    unique_name = f"{secrets.token_hex(8)}.{ext}"
+    filepath = os.path.join(UPLOAD_DIR, unique_name)
+    file.save(filepath)
+
+    url = f"/static/uploads/{unique_name}"
+    return jsonify({'success': True, 'url': url, 'filename': unique_name})
 
 
 # ============================================================

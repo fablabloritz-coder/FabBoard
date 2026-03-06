@@ -18,6 +18,7 @@
     const tailleTexte = config.taille_texte || 'normal';
     const tailleCartes = config.taille_cartes || 'normal';
     const afficherDate = config.afficher_date_dessus !== false;
+    const codeUrgence = config.code_couleur_urgence !== false;
 
     /* Apply size class to container */
     root.classList.add('cal-text-' + tailleTexte, 'cal-card-' + tailleCartes);
@@ -52,6 +53,17 @@
 
     function dayKey(dt) {
         return dt.toISOString().slice(0, 10);
+    }
+
+    function getUrgence(dt) {
+        if (!dt || !codeUrgence) return { classe: '', badge: '' };
+        const now = new Date();
+        const heures = (dt - now) / 3600000;
+        if (heures < 0) return { classe: '', badge: '' };
+        if (heures <= 24) return { classe: 'cal-urgence-critique', badge: '<span class="cal-urgence-badge critique">Imminent</span>' };
+        if (heures <= 72) return { classe: 'cal-urgence-proche', badge: '<span class="cal-urgence-badge proche">Proche</span>' };
+        if (heures <= 168) return { classe: 'cal-urgence-moyen', badge: '<span class="cal-urgence-badge moyen">Cette sem.</span>' };
+        return { classe: 'cal-urgence-loin', badge: '' };
     }
 
     function filterByDays(events) {
@@ -112,12 +124,13 @@
                 const timeStr = allDay ? 'Toute la journée' : (dt ? fmtTime(dt) : '');
                 const lieu = evt.lieu || evt.location || '';
                 const titre = evt.titre || evt.summary || 'Événement';
+                const urg = getUrgence(dt);
 
                 html += `
-                    <div class="cal-event-card">
+                    <div class="cal-event-card ${urg.classe}">
                         <div class="cal-event-time">
                             <i class="bi bi-${allDay ? 'calendar-check' : 'clock'}"></i>
-                            ${esc(timeStr)}
+                            ${esc(timeStr)}${urg.badge}
                         </div>
                         <div class="cal-event-title">${esc(titre)}</div>
                         ${lieu ? `<div class="cal-event-location"><i class="bi bi-geo-alt"></i> ${esc(lieu)}</div>` : ''}

@@ -173,6 +173,13 @@ async function loadThemeSettings() {
     } catch (error) {
         console.error('Erreur chargement thème:', error);
     }
+
+    // Charger les paramètres (police, etc.)
+    try {
+        const params = await fetch('/api/parametres').then(r => r.json());
+        const police = params.police_dashboard || 'inter';
+        document.body.classList.add('font-' + police);
+    } catch (e) { /* default Inter */ }
 }
 
 // ========== SLIDES ==========
@@ -239,6 +246,22 @@ async function displayCurrentSlide() {
     const slide = slides[currentSlideIndex];
     const container = document.getElementById('dashboard-container');
     
+    // Appliquer le fond de slide
+    container.classList.remove('slide-bg-color', 'slide-bg-image');
+    container.style.removeProperty('background-color');
+    container.style.removeProperty('background-image');
+    container.style.removeProperty('background');
+    
+    const fondType = slide.fond_type || 'defaut';
+    const fondValeur = slide.fond_valeur || '';
+    if (fondType === 'couleur' && fondValeur) {
+        container.classList.add('slide-bg-color');
+        container.style.backgroundColor = fondValeur;
+    } else if (fondType === 'image' && fondValeur) {
+        container.classList.add('slide-bg-image');
+        container.style.backgroundImage = 'url(' + fondValeur + ')';
+    }
+    
     // Parser la grille layout
     const grille = JSON.parse(slide.grille_json);
     
@@ -280,6 +303,14 @@ async function displayCurrentSlide() {
         const widgetElement = container.querySelector(`[data-position="${index}"]`);
         
         if (widgetData) {
+            // Appliquer l'échelle du widget
+            const cfg = JSON.parse(widgetData.config_json || '{}');
+            const echelle = cfg.echelle || '1';
+            if (echelle !== '1') {
+                const scaleClass = 'widget-scale-' + echelle.replace('.', '-');
+                widgetElement.classList.add(scaleClass);
+            }
+
             const widgetHTML = await renderWidget(widgetData, slide.id, index);
             injectWidgetHtml(widgetElement, widgetHTML);
         } else {

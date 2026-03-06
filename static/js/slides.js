@@ -18,6 +18,74 @@ function safeEscape(str) {
     return div.innerHTML;
 }
 
+/**
+ * Upload une image via /api/upload et met à jour le champ caché correspondant.
+ */
+function uploadImageField(fileInput, configKey) {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/api/upload', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                const hidden = fileInput.closest('.mb-3').querySelector('[data-config-key="' + configKey + '"]');
+                if (hidden) hidden.value = result.url;
+                // Mettre à jour l'aperçu
+                let preview = fileInput.closest('.mb-3').querySelector('img');
+                if (!preview) {
+                    const div = document.createElement('div');
+                    div.className = 'mb-2';
+                    div.innerHTML = '<img style="max-width:100%;max-height:120px;border-radius:6px;border:1px solid #dee2e6;">';
+                    fileInput.closest('.mb-3').insertBefore(div, fileInput.closest('.mb-3').querySelector('label').nextSibling);
+                    preview = div.querySelector('img');
+                }
+                preview.src = result.url;
+                showToast('Image uploadée', 'success');
+            } else {
+                showToast(result.error || 'Erreur upload', 'error');
+            }
+        })
+        .catch(() => showToast('Erreur lors de l\'upload', 'error'));
+}
+
+/**
+ * Affiche/masque les options de fond selon le type sélectionné.
+ */
+function toggleFondOptions() {
+    const type = document.getElementById('slideFondType').value;
+    document.getElementById('fondCouleurGroup').style.display = type === 'couleur' ? '' : 'none';
+    document.getElementById('fondImageGroup').style.display = type === 'image' ? '' : 'none';
+}
+
+/**
+ * Upload d'image de fond de slide.
+ */
+function uploadSlideBg(fileInput) {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/api/upload', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                document.getElementById('slideFondImage').value = result.url;
+                document.getElementById('fondImagePreview').innerHTML =
+                    '<img src="' + escapeHtml(result.url) + '" style="max-width:100%;max-height:80px;border-radius:6px;">';
+                showToast('Image de fond uploadée', 'success');
+            } else {
+                showToast(result.error || 'Erreur upload', 'error');
+            }
+        })
+        .catch(() => showToast('Erreur lors de l\'upload', 'error'));
+}
+
 // ========== STATE ==========
 let currentSlides = [];
 let currentLayouts = [];
@@ -497,6 +565,11 @@ function openAddSlideModal() {
     document.getElementById('slideName').value = '';
     document.getElementById('slideDuration').value = '30';
     document.getElementById('slideActive').checked = true;
+    document.getElementById('slideFondType').value = 'defaut';
+    document.getElementById('slideFondCouleur').value = '#0b1120';
+    document.getElementById('slideFondImage').value = '';
+    document.getElementById('fondImagePreview').innerHTML = '';
+    toggleFondOptions();
     
     renderLayoutSelector();
     
@@ -513,6 +586,19 @@ function editSlide(slideId) {
     document.getElementById('slideName').value = slide.nom;
     document.getElementById('slideDuration').value = slide.temps_affichage;
     document.getElementById('slideActive').checked = slide.actif === 1;
+
+    // Fond de slide
+    const fondType = slide.fond_type || 'defaut';
+    const fondValeur = slide.fond_valeur || '';
+    document.getElementById('slideFondType').value = fondType;
+    if (fondType === 'couleur') {
+        document.getElementById('slideFondCouleur').value = fondValeur || '#0b1120';
+    } else if (fondType === 'image') {
+        document.getElementById('slideFondImage').value = fondValeur;
+        const preview = document.getElementById('fondImagePreview');
+        preview.innerHTML = fondValeur ? '<img src="' + escapeHtml(fondValeur) + '" style="max-width:100%;max-height:80px;border-radius:6px;">' : '';
+    }
+    toggleFondOptions();
     
     renderLayoutSelector(slide.layout_id);
     
@@ -566,6 +652,15 @@ async function saveSlide() {
     const temps_affichage = parseInt(document.getElementById('slideDuration').value);
     const actif = document.getElementById('slideActive').checked ? 1 : 0;
     
+    // Fond
+    const fond_type = document.getElementById('slideFondType').value;
+    let fond_valeur = '';
+    if (fond_type === 'couleur') {
+        fond_valeur = document.getElementById('slideFondCouleur').value;
+    } else if (fond_type === 'image') {
+        fond_valeur = document.getElementById('slideFondImage').value;
+    }
+    
     // Récupérer le layout sélectionné
     const selectedLayout = document.querySelector('.layout-option.selected');
     if (!selectedLayout) {
@@ -581,7 +676,7 @@ async function saveSlide() {
     }
     
     try {
-        const data = { nom, layout_id, temps_affichage, actif };
+        const data = { nom, layout_id, temps_affichage, actif, fond_type, fond_valeur };
         let result;
         let newSlideId;
         
@@ -758,6 +853,17 @@ async function saveWidgetConfig() {
 /**
  * Définitions des options de configuration par type de widget
  */
+const ECHELLE_FIELD = {
+    key: 'echelle', label: "Échelle d'affichage (TV)", type: 'select', options: [
+        { value: '1', label: '1× — Normal' },
+        { value: '1.25', label: '1.25× — Légèrement agrandi' },
+        { value: '1.5', label: '1.5× — Grand' },
+        { value: '2', label: '2× — Très grand' },
+        { value: '2.5', label: '2.5× — Extra grand' },
+        { value: '3', label: '3× — Maximum' }
+    ], default: '1'
+};
+
 const WIDGET_CONFIG_DEFINITIONS = {
     horloge: {
         titre: 'Horloge',
@@ -767,7 +873,8 @@ const WIDGET_CONFIG_DEFINITIONS = {
                 { value: '12h', label: '12 heures (AM/PM)' }
             ], default: '24h' },
             { key: 'afficher_secondes', label: 'Afficher les secondes', type: 'checkbox', default: true },
-            { key: 'afficher_date', label: 'Afficher la date', type: 'checkbox', default: true }
+            { key: 'afficher_date', label: 'Afficher la date', type: 'checkbox', default: true },
+            ECHELLE_FIELD
         ]
     },
     texte_libre: {
@@ -785,7 +892,8 @@ const WIDGET_CONFIG_DEFINITIONS = {
                 { value: 'left', label: 'Gauche' },
                 { value: 'center', label: 'Centré' },
                 { value: 'right', label: 'Droite' }
-            ], default: 'left' }
+            ], default: 'left' },
+            ECHELLE_FIELD
         ]
     },
     compteurs: {
@@ -794,7 +902,8 @@ const WIDGET_CONFIG_DEFINITIONS = {
             { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
             { key: 'afficher_en_attente', label: 'Afficher "À faire"', type: 'checkbox', default: true },
             { key: 'afficher_en_cours', label: 'Afficher "En cours"', type: 'checkbox', default: true },
-            { key: 'afficher_termines', label: 'Afficher "Terminées"', type: 'checkbox', default: true }
+            { key: 'afficher_termines', label: 'Afficher "Terminées"', type: 'checkbox', default: true },
+            ECHELLE_FIELD
         ]
     },
     activites: {
@@ -807,7 +916,8 @@ const WIDGET_CONFIG_DEFINITIONS = {
                 { value: 'haute', label: 'Haute uniquement' },
                 { value: 'moyenne', label: 'Moyenne et +' },
                 { value: 'basse', label: 'Basse et +' }
-            ], default: '' }
+            ], default: '' },
+            ECHELLE_FIELD
         ]
     },
     calendrier: {
@@ -828,7 +938,9 @@ const WIDGET_CONFIG_DEFINITIONS = {
                 { value: 'large', label: 'Grand' },
                 { value: 'xlarge', label: 'Très grand' }
             ], default: 'normal' },
-            { key: 'afficher_date_dessus', label: 'Afficher la date au-dessus', type: 'checkbox', default: true }
+            { key: 'afficher_date_dessus', label: 'Afficher la date au-dessus', type: 'checkbox', default: true },
+            { key: 'code_couleur_urgence', label: 'Code couleur urgence', type: 'checkbox', default: true },
+            ECHELLE_FIELD
         ]
     },
     meteo: {
@@ -839,7 +951,8 @@ const WIDGET_CONFIG_DEFINITIONS = {
             { key: 'unite', label: 'Unité', type: 'select', options: [
                 { value: 'celsius', label: 'Celsius (°C)' },
                 { value: 'fahrenheit', label: 'Fahrenheit (°F)' }
-            ], default: 'celsius' }
+            ], default: 'celsius' },
+            ECHELLE_FIELD
         ]
     },
     fabtrack_stats: {
@@ -850,28 +963,44 @@ const WIDGET_CONFIG_DEFINITIONS = {
                 { value: 'jour', label: "Aujourd'hui" },
                 { value: 'semaine', label: 'Cette semaine' },
                 { value: 'mois', label: 'Ce mois' }
-            ], default: 'jour' }
+            ], default: 'jour' },
+            ECHELLE_FIELD
         ]
     },
     fabtrack_machines: {
         titre: 'État machines',
         fields: [
             { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
-            { key: 'afficher_inactives', label: 'Afficher les machines inactives', type: 'checkbox', default: false }
+            { key: 'afficher_inactives', label: 'Afficher les machines inactives', type: 'checkbox', default: false },
+            ECHELLE_FIELD
         ]
     },
     fabtrack_conso: {
         titre: 'Dernières consommations',
         fields: [
             { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
-            { key: 'nombre_max', label: 'Nombre max', type: 'number', default: 5, min: 1, max: 20 }
+            { key: 'nombre_max', label: 'Nombre max', type: 'number', default: 5, min: 1, max: 20 },
+            ECHELLE_FIELD
         ]
     },
     imprimantes: {
         titre: 'Imprimantes 3D',
         fields: [
             { key: 'source_id', label: 'Source imprimantes', type: 'source_select', source_type: 'repetier', default: '' },
-            { key: 'afficher_inactives', label: 'Afficher les imprimantes hors-ligne', type: 'checkbox', default: false }
+            { key: 'afficher_inactives', label: 'Afficher les imprimantes hors-ligne', type: 'checkbox', default: false },
+            ECHELLE_FIELD
+        ]
+    },
+    image: {
+        titre: 'Image',
+        fields: [
+            { key: 'image_url', label: 'Image', type: 'image_upload', default: '' },
+            { key: 'titre_image', label: 'Titre (optionnel)', type: 'text', default: '', placeholder: 'Légende sous l\'image' },
+            { key: 'object_fit', label: 'Ajustement', type: 'select', options: [
+                { value: 'contain', label: 'Contenir (proportions gardées)' },
+                { value: 'cover', label: 'Couvrir (recadré)' },
+                { value: 'fill', label: 'Étirer' }
+            ], default: 'contain' }
         ]
     }
 };
@@ -1006,6 +1135,15 @@ function buildFieldHtml(field, value, sourcesCache) {
                 (value ? 'checked' : '') + '>' +
                 '<label class="form-check-label">' + escapeHtml(field.label) + '</label>' +
                 '</div>' +
+                '</div>';
+
+        case 'image_upload':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                (value ? '<div class="mb-2"><img src="' + escapeHtml(value) + '" style="max-width:100%;max-height:120px;border-radius:6px;border:1px solid #dee2e6;"></div>' : '') +
+                '<input type="hidden" data-config-key="' + field.key + '" value="' + escapeHtml(String(value || '')) + '">' +
+                '<input type="file" class="form-control" accept="image/*" onchange="uploadImageField(this, \'' + field.key + '\')">' +
+                '<small class="form-text text-muted">JPG, PNG, GIF, WebP, SVG acceptés.</small>' +
                 '</div>';
 
         default:

@@ -239,6 +239,7 @@ def init_db():
             ('imprimantes', 'Imprimantes 3D', 'État des imprimantes 3D', '🖨️', 'imprimantes'),
             ('meteo', 'Météo', 'Météo locale', '🌤️', 'general'),
             ('texte_libre', 'Texte libre', 'Zone de texte personnalisée', '📝', 'general'),
+            ('image', 'Image', 'Affiche une image (JPG, PNG)', '🖼️', 'general'),
         ]
         
         c.executemany(
@@ -278,6 +279,30 @@ def init_db():
     conn.commit()
     conn.close()
     print(f'[FabBoard] Base de données initialisée : {DB_PATH}')
+
+
+def migrate_db():
+    """Migrations incrémentales pour les bases de données existantes."""
+    conn = get_db()
+    c = conn.cursor()
+
+    # Migration : ajouter le widget 'image' s'il n'existe pas
+    if c.execute("SELECT COUNT(*) FROM widgets_disponibles WHERE code = 'image'").fetchone()[0] == 0:
+        c.execute(
+            "INSERT INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?, ?, ?, ?, ?)",
+            ('image', 'Image', 'Affiche une image (JPG, PNG)', '🖼️', 'general')
+        )
+        print('[FabBoard] Migration : widget image ajouté')
+
+    # Migration : ajouter les colonnes fond_type/fond_valeur à la table slides
+    columns = [row[1] for row in c.execute("PRAGMA table_info(slides)").fetchall()]
+    if 'fond_type' not in columns:
+        c.execute("ALTER TABLE slides ADD COLUMN fond_type TEXT DEFAULT 'defaut'")
+        c.execute("ALTER TABLE slides ADD COLUMN fond_valeur TEXT DEFAULT ''")
+        print('[FabBoard] Migration : colonnes fond_type/fond_valeur ajoutées à slides')
+
+    conn.commit()
+    conn.close()
 
 
 def reset_db():
