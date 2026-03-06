@@ -1,0 +1,92 @@
+<div class="widget widget-activites" id="widget-activites-{{ widget_id }}" data-widget-code="activites" data-max-items="{{ config.get('max_items', 5) }}">
+    <h3><i class="bi bi-list-check"></i> Activites recentes</h3>
+    <div class="activites-list js-activites-list">
+        <div style="color: #475569;">Chargement...</div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const root = document.getElementById('widget-activites-{{ widget_id }}');
+    if (!root) return;
+
+    const list = root.querySelector('.js-activites-list');
+    const maxItems = Number(root.dataset.maxItems || 5) || 5;
+
+    function esc(value) {
+        const div = document.createElement('div');
+        div.textContent = value || '';
+        return div.innerHTML;
+    }
+
+    function fmtDate(value) {
+        if (!value) return '--';
+        const dt = new Date(value.replace(' ', 'T'));
+        if (Number.isNaN(dt.getTime())) return value;
+        return dt.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function render(items, fabtrackError) {
+        if (fabtrackError) {
+            list.innerHTML = `<div style="color: #f87171; font-size: 0.8rem;">${esc(fabtrackError)}</div>`;
+            return;
+        }
+
+        if (!items.length) {
+            list.innerHTML = '<div style="color: #475569;">Aucune activite recente.</div>';
+            return;
+        }
+
+        list.innerHTML = items.slice(0, maxItems).map((item) => `
+            <div class="activite-item">
+                <div class="activite-titre">${esc(item.type_activite_nom || item.nom_type_activite || 'Activite')}</div>
+                <div class="activite-meta">
+                    <span class="badge" style="background:#1e293b; color:#94a3b8;">${esc(item.machine_nom || item.nom_machine || 'Machine n/a')}</span>
+                    <span>${esc(item.preparateur_nom || item.nom_preparateur || 'Preparateur n/a')}</span>
+                    <span style="color:#475569;">${esc(fmtDate(item.date_saisie || ''))}</span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    const config = {{ config | tojson | safe }};
+    const sourceId = config.source_id || null;
+
+    async function refresh() {
+        try {
+            let items = [];
+            let errorMsg = '';
+
+            if (sourceId) {
+                const resp = await fetch('/api/widget-data/' + sourceId);
+                const result = await resp.json();
+                if (result.success && result.data) {
+                    items = result.data.consommations || [];
+                } else {
+                    errorMsg = result.error || 'Pas de données';
+                }
+            } else {
+                const resp = await fetch('/api/dashboard/data');
+                const data = await resp.json();
+                items = data.activites || [];
+                errorMsg = data.fabtrack_error || '';
+            }
+
+            render(items, errorMsg);
+        } catch (error) {
+            list.innerHTML = `<div style="color: #f87171;">Erreur: ${esc(error.message)}</div>`;
+        }
+    }
+
+    function onDashboardRefresh() {
+        if (!root.isConnected) {
+            document.removeEventListener('fabboard:refresh', onDashboardRefresh);
+            return;
+        }
+        refresh();
+    }
+
+    document.addEventListener('fabboard:refresh', onDashboardRefresh);
+    refresh();
+})();
+</script>

@@ -1,0 +1,74 @@
+<!-- Widget Texte Libre : Affiche du texte personnalisé -->
+<div class="widget widget-texte-libre" data-widget-code="texte_libre" id="widget-texte-{{ widget_id }}">
+    <div class="texte-container">
+        <h2 class="texte-titre">{{ config.titre | default('Titre', true) }}</h2>
+        <div class="texte-contenu">{{ config.contenu | default('Contenu du widget texte libre. Configurez-le dans les paramètres de la slide.', true) }}</div>
+    </div>
+</div>
+
+<style>
+.widget-texte-libre {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    background: #111827;
+    border-radius: 0;
+    padding: 24px;
+    overflow: hidden;
+    position: relative;
+}
+
+.texte-container {
+    text-align: center;
+    color: #e2e8f0;
+    z-index: 1;
+    max-width: 90%;
+}
+
+.texte-titre {
+    font-size: {{ config.taille_titre | default('clamp(20px, 3.5vw, 40px)', true) }};
+    font-weight: 700;
+    margin: 0 0 16px 0;
+    line-height: 1.2;
+    color: #e2e8f0;
+}
+
+.texte-contenu {
+    font-size: {{ config.taille_contenu | default('clamp(14px, 2vw, 26px)', true) }};
+    font-weight: 400;
+    line-height: 1.5;
+    color: #94a3b8;
+    white-space: pre-wrap;
+}
+</style>
+
+<script>
+(function() {
+    const widgetId = '{{ widget_id }}';
+    const config = {{ config | tojson | safe }};
+    
+    // Si emoji configuré, l'ajouter au titre
+    if (config.emoji) {
+        const titreEl = document.querySelector('#widget-texte-' + widgetId + ' .texte-titre');
+        if (titreEl && !titreEl.textContent.includes(config.emoji)) {
+            titreEl.textContent = config.emoji + ' ' + titreEl.textContent;
+        }
+    }
+    
+    // Support Markdown basique (optionnel)
+    if (config.markdown) {
+        const contenuEl = document.querySelector('#widget-texte-' + widgetId + ' .texte-contenu');
+        if (contenuEl) {
+            let html = contenuEl.textContent;
+            // Gras **texte**
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            // Italique *texte*
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            // Retour ligne
+            html = html.replace(/\n/g, '<br>');
+            contenuEl.innerHTML = html;
+        }
+    }
+})();
+</script>

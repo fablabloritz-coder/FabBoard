@@ -1,0 +1,74 @@
+<div class="widget widget-fabtrack-stats" id="widget-fabtrack-stats-{{ widget_id }}" data-widget-code="fabtrack_stats">
+    <h3><i class="bi bi-graph-up"></i> Stats Fabtrack</h3>
+    <div class="fabtrack-stats-grid js-stats-grid">
+        <div class="compteur-item"><div class="compteur-value">--</div><div class="compteur-label">Total</div></div>
+        <div class="compteur-item"><div class="compteur-value">--</div><div class="compteur-label">Papier couleur</div></div>
+        <div class="compteur-item"><div class="compteur-value">--</div><div class="compteur-label">Papier N&B</div></div>
+        <div class="compteur-item"><div class="compteur-value">--</div><div class="compteur-label">Top type</div></div>
+    </div>
+    <div class="small mt-2 js-stats-extra" style="color: #475569; padding: 0 1.1rem 0.5rem; font-size: 0.75rem;"></div>
+</div>
+
+<script>
+(function () {
+    const root = document.getElementById('widget-fabtrack-stats-{{ widget_id }}');
+    if (!root) return;
+
+    const grid = root.querySelector('.js-stats-grid');
+    const extra = root.querySelector('.js-stats-extra');
+
+    function esc(value) {
+        const div = document.createElement('div');
+        div.textContent = value || '';
+        return div.innerHTML;
+    }
+
+    function n(value) {
+        if (value === null || value === undefined) return '0';
+        return Number(value).toLocaleString('fr-FR');
+    }
+
+    function render(stats, fabtrackError) {
+        if (fabtrackError) {
+            extra.style.color = '#f87171';
+            extra.textContent = fabtrackError;
+            return;
+        }
+
+        const topType = (stats.by_type && stats.by_type.length) ? stats.by_type[0] : null;
+        const topPrep = (stats.by_preparateur && stats.by_preparateur.length) ? stats.by_preparateur[0] : null;
+
+        grid.innerHTML = `
+            <div class="compteur-item"><div class="compteur-value">${n(stats.total_interventions)}</div><div class="compteur-label">Total</div></div>
+            <div class="compteur-item"><div class="compteur-value">${n(stats.total_papier_couleur)}</div><div class="compteur-label">Papier couleur</div></div>
+            <div class="compteur-item"><div class="compteur-value">${n(stats.total_papier_nb)}</div><div class="compteur-label">Papier N&B</div></div>
+            <div class="compteur-item"><div class="compteur-value">${n(topType ? topType.count : 0)}</div><div class="compteur-label">${esc(topType ? topType.nom : 'Top type')}</div></div>
+        `;
+
+        extra.style.color = '#475569';
+        extra.textContent = topPrep ? `Top preparateur: ${topPrep.nom} (${topPrep.count})` : 'Aucune repartition disponible';
+    }
+
+    async function refresh() {
+        try {
+            const resp = await fetch('/api/dashboard/data');
+            const data = await resp.json();
+            render(data.fabtrack_stats || {}, data.fabtrack_error || '');
+        } catch (error) {
+            extra.className = 'small mt-2 js-stats-extra text-danger';
+            extra.textContent = `Erreur: ${error.message}`;
+        }
+    }
+
+    function onDashboardRefresh() {
+        if (!root.isConnected) {
+            document.removeEventListener('fabboard:refresh', onDashboardRefresh);
+            return;
+        }
+        refresh();
+    }
+
+    document.addEventListener('fabboard:refresh', onDashboardRefresh);
+    refresh();
+})();
+</script>

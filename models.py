@@ -59,6 +59,15 @@ def init_db():
         UNIQUE(source_id, uid)
     );
 
+    -- Table cache des données sources (Phase 3)
+    CREATE TABLE IF NOT EXISTS sources_cache (
+        source_id INTEGER PRIMARY KEY,
+        data_json TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        fetched_at TEXT DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE
+    );
+
     -- Table des paramètres (clé-valeur)
     CREATE TABLE IF NOT EXISTS parametres (
         cle TEXT PRIMARY KEY,
@@ -67,6 +76,7 @@ def init_db():
 
     -- Index pour améliorer les performances
     CREATE INDEX IF NOT EXISTS idx_evenements_date_debut ON evenements_calendrier(date_debut);
+    CREATE INDEX IF NOT EXISTS idx_sources_cache_expires ON sources_cache(expires_at);
 
     -- ========== PHASE 1.5 : SYSTÈME DE SLIDES ==========
 

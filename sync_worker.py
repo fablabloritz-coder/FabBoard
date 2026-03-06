@@ -1,0 +1,330 @@
+"""
+FabBoard — Sync Worker Background
+Polling automatique des sources externes et cache des données
+Phase 3 : Système de synchronisation
+"""
+
+import threading
+import time
+import json
+from datetime import datetime, timedelta
+from models import get_db
+import requests
+from urllib.parse import quote
+
+
+class SyncWorker:
+    """Worker qui synchronise les sources externes en continu."""
+    
+    def __init__(self, poll_interval=10):
+        """
+        Initialise le worker.
+        
+        Args:
+            poll_interval: Intervalle de polling principal (en secondes)
+        """
+        self.poll_interval = poll_interval
+        self.running = False
+        self.thread = None
+    
+    def start(self):
+        """Démarre le worker en background thread."""
+        if not self.running:
+            self.running = True
+            self.thread = threading.Thread(target=self._sync_loop, daemon=True)
+            self.thread.start()
+            print('[SyncWorker] Sync worker démarré')
+    
+    def stop(self):
+        """Arrête le worker."""
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=5)
+        print('[SyncWorker] Sync worker arrêté')
+    
+    def _sync_loop(self):
+        """Boucle infinie de synchronisation."""
+        while self.running:
+            try:
+                db = get_db()
+                try:
+                    # Récupérer toutes les sources actives
+                    sources = db.execute(
+                        'SELECT * FROM sources WHERE actif = 1'
+                    ).fetchall()
+                    
+                    for source_row in sources:
+                        # Convertir sqlite3.Row en dict
+                        source = dict(source_row)
+                        self._sync_source(db, source)
+                finally:
+                    db.close()
+            except Exception as e:
+                # Log erreur mais continuer
+                print(f'[SyncWorker] Erreur dans boucle: {e}')
+            
+            # Attendre avant prochain cycle
+            time.sleep(self.poll_interval)
+    
+    def _sync_source(self, db, source):
+        """Synchronise une source donnée si nécessaire."""
+        source_id = source['id']
+        
+        # Vérifier si sync est nécessaire
+        if not self._should_sync(source):
+            return
+        
+        try:
+            # Récupérer les données selon type
+            data, error = self._fetch_source_data(source)
+            
+            if data is not None:
+                # Cacher les données
+                self._cache_source_data(db, source_id, data, source['sync_interval_sec'])
+                
+                # Mettre à jour dernière_sync
+                db.execute(
+                    'UPDATE sources SET derniere_sync = ?, derniere_erreur = ? WHERE id = ?',
+                    (datetime.now().isoformat(), '', source_id)
+                )
+                db.commit()
+            else:
+                # Enregistrer erreur
+                db.execute(
+                    'UPDATE sources SET derniere_erreur = ? WHERE id = ?',
+                    (error, source_id)
+                )
+                db.commit()
+        except Exception as e:
+            print(f'[SyncWorker] Erreur sync source {source_id}: {e}')
+            try:
+                db.execute(
+                    'UPDATE sources SET derniere_erreur = ? WHERE id = ?',
+                    (str(e), source_id)
+                )
+                db.commit()
+            except:
+                pass
+    
+    def _should_sync(self, source):
+        """Vérifie si une source doit être synchronisée."""
+        if not source.get('derniere_sync'):
+            return True
+        
+        try:
+            last_sync = datetime.fromisoformat(source['derniere_sync'])
+            sync_interval = timedelta(seconds=source.get('sync_interval_sec', 60))
+            return datetime.now() >= last_sync + sync_interval
+        except:
+            return True
+    
+    def _fetch_source_data(self, source):
+        """
+        Récupère les données d'une source.
+        
+        Returns:
+            (data_dict, error_string) ou (None, error_string) en cas d'erreur
+        """
+        source_type = source['type']
+        url = source['url']
+        credentials = json.loads(source.get('credentials_json', '{}') or '{}')
+        
+        try:
+            if source_type == 'fabtrack':
+                return self._fetch_fabtrack(url, credentials)
+            elif source_type in ('repetier', 'prusalink'):
+                return self._fetch_printer_api(url, credentials, source_type)
+            elif source_type == 'nextcloud_caldav':
+                return self._fetch_caldav(url, credentials)
+            elif source_type == 'openweathermap':
+                return self._fetch_openweathermap(url, credentials)
+            elif source_type in ('rss', 'http'):
+                return self._fetch_generic_http(url, credentials)
+            else:
+                return None, f"Type source non supporté: {source_type}"
+        except Exception as e:
+            return None, str(e)
+    
+    def _fetch_fabtrack(self, url, credentials):
+        """Récupère les stats Fabtrack."""
+        url = url.rstrip('/')
+        
+        try:
+            # Stats summary
+            summary_resp = requests.get(f"{url}/api/stats/summary", timeout=4)
+            summary_resp.raise_for_status()
+            summary = summary_resp.json()
+            
+            # Consommations récentes
+            conso_resp = requests.get(f"{url}/api/consommations?per_page=10&page=1", timeout=4)
+            conso_resp.raise_for_status()
+            conso = conso_resp.json()
+            
+            # Reference (machines, etc)
+            ref_resp = requests.get(f"{url}/api/reference", timeout=4)
+            ref_resp.raise_for_status()
+            reference = ref_resp.json()
+            
+            # Compiler données
+            machines = [
+                {
+                    'id': m.get('id'),
+                    'nom': m.get('nom', 'Machine'),
+                    'statut': m.get('statut', 'inconnu'),
+                    'actif': m.get('actif', 1),
+                }
+                for m in (reference.get('machines') or [])
+            ]
+            
+            return {
+                'summary': summary,
+                'consommations': conso.get('data', []),
+                'machines': machines,
+                'fetched_at': datetime.now().isoformat(),
+            }, ''
+        except requests.RequestException as e:
+            return None, f"Fabtrack: {str(e)}"
+    
+    def _fetch_printer_api(self, url, credentials, source_type):
+        """Récupère l'état des imprimantes (Repetier ou PrusaLink)."""
+        url = url.rstrip('/')
+        
+        try:
+            if source_type == 'repetier':
+                # Repetier Server API
+                apikey = credentials.get('apikey', '')
+                resp = requests.get(
+                    f"{url}/api/v1/printers",
+                    headers={'X-Api-Key': apikey} if apikey else {},
+                    timeout=4
+                )
+            else:  # prusalink
+                # PrusaLink API
+                auth = None
+                if credentials.get('user') and credentials.get('pass'):
+                    auth = (credentials['user'], credentials['pass'])
+                resp = requests.get(
+                    f"{url}/api/v1/status",
+                    auth=auth,
+                    timeout=4
+                )
+            
+            resp.raise_for_status()
+            data = resp.json()
+            
+            return {
+                'printers': data.get('printers', []) if source_type == 'repetier' else [data],
+                'fetched_at': datetime.now().isoformat(),
+            }, ''
+        except requests.RequestException as e:
+            return None, f"{source_type}: {str(e)}"
+    
+    def _fetch_caldav(self, url, credentials):
+        """Récupère les événements CalDAV."""
+        try:
+            user = credentials.get('user', '')
+            password = credentials.get('pass', '')
+            
+            auth = (user, password) if user and password else None
+            
+            resp = requests.get(url, auth=auth, timeout=4)
+            resp.raise_for_status()
+            
+            # Parser iCal basique (simplifié)
+            events = []
+            lines = resp.text.split('\n')
+            for line in lines:
+                if line.startswith('SUMMARY:'):
+                    events.append({'summary': line.replace('SUMMARY:', '')})
+            
+            return {
+                'events': events,
+                'fetched_at': datetime.now().isoformat(),
+            }, ''
+        except requests.RequestException as e:
+            return None, f"CalDAV: {str(e)}"
+    
+    def _fetch_openweathermap(self, url, credentials):
+        """Récupère les données météo OpenWeatherMap."""
+        try:
+            apikey = credentials.get('apikey', '')
+            city = credentials.get('city', 'Paris')
+            
+            if not apikey:
+                return None, "OpenWeatherMap: API key manquante"
+            
+            resp = requests.get(
+                f"{url}/data/2.5/weather",
+                params={'q': city, 'appid': apikey, 'units': 'metric'},
+                timeout=4
+            )
+            resp.raise_for_status()
+            
+            data = resp.json()
+            return {
+                'weather': data,
+                'fetched_at': datetime.now().isoformat(),
+            }, ''
+        except requests.RequestException as e:
+            return None, f"OpenWeatherMap: {str(e)}"
+    
+    def _fetch_generic_http(self, url, credentials):
+        """Récupère des données JSON d'une API générique."""
+        try:
+            headers = {}
+            if credentials.get('headers'):
+                headers = credentials.get('headers')
+            
+            auth = None
+            if credentials.get('user') and credentials.get('pass'):
+                auth = (credentials['user'], credentials['pass'])
+            
+            resp = requests.get(url, auth=auth, headers=headers, timeout=4)
+            resp.raise_for_status()
+            
+            return {
+                'data': resp.json(),
+                'fetched_at': datetime.now().isoformat(),
+            }, ''
+        except requests.RequestException as e:
+            return None, f"HTTP: {str(e)}"
+    
+    def _cache_source_data(self, db, source_id, data, interval_sec):
+        """Cache les données d'une source."""
+        expires_at = datetime.now() + timedelta(seconds=interval_sec)
+        data_json = json.dumps(data)
+        
+        # INSERT OR REPLACE
+        db.execute(
+            '''INSERT OR REPLACE INTO sources_cache (source_id, data_json, expires_at)
+               VALUES (?, ?, ?)''',
+            (source_id, data_json, expires_at.isoformat())
+        )
+        db.commit()
+
+
+# Instance globale
+_worker = None
+
+
+def start_sync_worker(poll_interval=10):
+    """Démarre le worker de synchronisation."""
+    global _worker
+    if _worker is None:
+        _worker = SyncWorker(poll_interval=poll_interval)
+        _worker.start()
+        return _worker
+    return _worker
+
+
+def stop_sync_worker():
+    """Arrête le worker."""
+    global _worker
+    if _worker:
+        _worker.stop()
+        _worker = None
+
+
+def get_sync_worker():
+    """Retourne l'instance globale du worker."""
+    return _worker

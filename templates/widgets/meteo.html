@@ -1,0 +1,198 @@
+<!-- Widget Météo : Affiche la météo depuis OpenWeatherMap API -->
+<div class="widget widget-meteo" data-widget-code="meteo" id="widget-meteo-{{ widget_id }}">
+    <div class="meteo-container">
+        <div class="meteo-loading" id="meteo-loading-{{ widget_id }}">
+            <div class="spinner"></div>
+            <div>Chargement météo...</div>
+        </div>
+        
+        <div class="meteo-content" id="meteo-content-{{ widget_id }}" style="display: none;">
+            <div class="meteo-icon" id="meteo-icon-{{ widget_id }}">🌤️</div>
+            <div class="meteo-temp" id="meteo-temp-{{ widget_id }}">--°</div>
+            <div class="meteo-description" id="meteo-desc-{{ widget_id }}">--</div>
+            <div class="meteo-ville" id="meteo-ville-{{ widget_id }}">--</div>
+            <div class="meteo-details" id="meteo-details-{{ widget_id }}">
+                <span>💧 --%</span>
+                <span>💨 -- km/h</span>
+            </div>
+        </div>
+        
+        <div class="meteo-error" id="meteo-error-{{ widget_id }}" style="display: none;">
+            <div class="error-icon">⚠️</div>
+            <div class="error-text">Météo indisponible</div>
+        </div>
+    </div>
+</div>
+
+<style>
+.widget-meteo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    background: #111827;
+    border-radius: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.meteo-container {
+    text-align: center;
+    color: #e2e8f0;
+    z-index: 1;
+    padding: 20px;
+}
+
+.meteo-icon {
+    font-size: clamp(40px, 5vw, 64px);
+    margin-bottom: 8px;
+}
+
+.meteo-temp {
+    font-size: clamp(32px, 5vw, 60px);
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 8px;
+    color: #e2e8f0;
+}
+
+.meteo-description {
+    font-size: clamp(14px, 2vw, 22px);
+    font-weight: 500;
+    margin-bottom: 6px;
+    text-transform: capitalize;
+    color: #94a3b8;
+}
+
+.meteo-ville {
+    font-size: clamp(12px, 1.6vw, 16px);
+    color: #64748b;
+    margin-bottom: 12px;
+}
+
+.meteo-details {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    font-size: clamp(11px, 1.5vw, 15px);
+    color: #64748b;
+}
+
+.meteo-loading, .meteo-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    font-size: clamp(13px, 1.8vw, 18px);
+    color: #475569;
+}
+
+.spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #1e293b;
+    border-top-color: #818cf8;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.error-icon {
+    font-size: 40px;
+}
+
+.error-text {
+    color: #64748b;
+}
+</style>
+
+<script>
+(function() {
+    const widgetId = '{{ widget_id }}';
+    const config = {{ config | tojson | safe }};
+    
+    const loadingEl = document.getElementById('meteo-loading-' + widgetId);
+    const contentEl = document.getElementById('meteo-content-' + widgetId);
+    const errorEl = document.getElementById('meteo-error-' + widgetId);
+    
+    const iconEl = document.getElementById('meteo-icon-' + widgetId);
+    const tempEl = document.getElementById('meteo-temp-' + widgetId);
+    const descEl = document.getElementById('meteo-desc-' + widgetId);
+    const villeEl = document.getElementById('meteo-ville-' + widgetId);
+    const detailsEl = document.getElementById('meteo-details-' + widgetId);
+    
+    // Mapping des icônes météo
+    const weatherIcons = {
+        '01d': '☀️', '01n': '🌙',
+        '02d': '⛅', '02n': '☁️',
+        '03d': '☁️', '03n': '☁️',
+        '04d': '☁️', '04n': '☁️',
+        '09d': '🌧️', '09n': '🌧️',
+        '10d': '🌦️', '10n': '🌧️',
+        '11d': '⛈️', '11n': '⛈️',
+        '13d': '❄️', '13n': '❄️',
+        '50d': '🌫️', '50n': '🌫️'
+    };
+    
+    async function fetchMeteo() {
+        try {
+            // Source ID depuis config
+            const sourceId = config.source_id || 1;
+            
+            // Appeler l'API FabBoard qui récupère depuis le cache
+            const resp = await fetch('/api/widget-data/' + sourceId);
+            
+            if (!resp.ok) throw new Error('API error');
+            
+            const data = await resp.json();
+            
+            if (data.success && data.data) {
+                const meteo = data.data;
+                
+                // Icône
+                const iconCode = meteo.weather?.[0]?.icon || '01d';
+                iconEl.textContent = weatherIcons[iconCode] || '🌤️';
+                
+                // Température
+                const temp = Math.round(meteo.main?.temp || 0);
+                tempEl.textContent = temp + '°C';
+                
+                // Description
+                descEl.textContent = meteo.weather?.[0]?.description || 'N/A';
+                
+                // Ville
+                villeEl.textContent = meteo.name || config.ville || 'Ville';
+                
+                // Détails
+                const humidity = meteo.main?.humidity || 0;
+                const windSpeed = Math.round((meteo.wind?.speed || 0) * 3.6); // m/s → km/h
+                detailsEl.innerHTML = `
+                    <span>💧 ${humidity}%</span>
+                    <span>💨 ${windSpeed} km/h</span>
+                `;
+                
+                // Afficher
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+                errorEl.style.display = 'none';
+            } else {
+                throw new Error('No data');
+            }
+        } catch (error) {
+            console.error('Erreur météo:', error);
+            loadingEl.style.display = 'none';
+            contentEl.style.display = 'none';
+            errorEl.style.display = 'flex';
+        }
+    }
+    
+    // Fetch initial
+    fetchMeteo();
+    
+    // Refresh toutes les 10 minutes
+    setInterval(fetchMeteo, 600000);
+})();
+</script>

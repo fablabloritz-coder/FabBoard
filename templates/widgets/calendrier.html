@@ -1,0 +1,67 @@
+<div class="widget widget-calendrier" id="widget-calendrier-{{ widget_id }}" data-widget-code="calendrier">
+    <h3><i class="bi bi-calendar-event"></i> Evenements calendrier</h3>
+    <div class="calendrier-list js-cal-list">
+        <div style="color: #475569;">Aucun evenement pour le moment.</div>
+    </div>
+    <small style="color: #334155; font-size: 0.72rem; padding: 0 1.1rem 0.5rem; display: block;">Tip: configurez une source `nextcloud_caldav` en phase 3.</small>
+</div>
+
+<script>
+(function () {
+    const root = document.getElementById('widget-calendrier-{{ widget_id }}');
+    if (!root) return;
+
+    const list = root.querySelector('.js-cal-list');
+
+    function esc(value) {
+        const div = document.createElement('div');
+        div.textContent = value || '';
+        return div.innerHTML;
+    }
+
+    function fmtDate(value) {
+        if (!value) return '--';
+        const dt = new Date(value.replace(' ', 'T'));
+        if (Number.isNaN(dt.getTime())) return value;
+        return dt.toLocaleString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function render(events) {
+        if (!events.length) {
+            list.innerHTML = '<div style="color: #475569;">Aucun evenement synchronise.</div>';
+            return;
+        }
+
+        list.innerHTML = events.slice(0, 6).map((evt) => `
+            <div class="activite-item">
+                <div class="activite-titre">${esc(evt.titre || 'Evenement')}</div>
+                <div class="activite-meta">
+                    <span class="badge" style="background:#1e293b; color:#94a3b8;">${esc(fmtDate(evt.date_debut || evt.start || ''))}</span>
+                    <span>${esc(evt.lieu || evt.location || '')}</span></span>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function refresh() {
+        try {
+            const resp = await fetch('/api/dashboard/data');
+            const data = await resp.json();
+            render(data.evenements || []);
+        } catch (error) {
+            list.innerHTML = `<div style="color: #f87171;">Erreur: ${esc(error.message)}</div>`;
+        }
+    }
+
+    function onDashboardRefresh() {
+        if (!root.isConnected) {
+            document.removeEventListener('fabboard:refresh', onDashboardRefresh);
+            return;
+        }
+        refresh();
+    }
+
+    document.addEventListener('fabboard:refresh', onDashboardRefresh);
+    refresh();
+})();
+</script>

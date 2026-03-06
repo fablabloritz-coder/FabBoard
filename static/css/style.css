@@ -169,3 +169,21 @@ body.light-mode .table {
         font-size: 1.2rem;
     }
 }
+
+/* Parametres - Sources */
+#sources-table-body code {
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+
+#sources-table-body .btn-group .btn {
+    min-width: 34px;
+}
+
+#sources-table-body tr td {
+    vertical-align: middle;
+}
+
+#source-type-help {
+    min-height: 1.25rem;
+}

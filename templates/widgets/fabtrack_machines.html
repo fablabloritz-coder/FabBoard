@@ -1,0 +1,85 @@
+<div class="widget widget-fabtrack-machines" id="widget-fabtrack-machines-{{ widget_id }}" data-widget-code="fabtrack_machines">
+    <h3><i class="bi bi-tools"></i> Etat des machines</h3>
+    <div class="machines-grid js-machines-grid">
+        <div style="color: #475569;">Chargement...</div>
+    </div>
+</div>
+
+<style>
+.widget-fabtrack-machines .machine-card {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 0.7rem;
+}
+.widget-fabtrack-machines .machine-name {
+    font-weight: 600;
+    color: #e2e8f0;
+    margin-bottom: 0.35rem;
+    font-size: 0.8rem;
+}
+</style>
+
+<script>
+(function () {
+    const root = document.getElementById('widget-fabtrack-machines-{{ widget_id }}');
+    if (!root) return;
+
+    const grid = root.querySelector('.js-machines-grid');
+
+    function esc(value) {
+        const div = document.createElement('div');
+        div.textContent = value || '';
+        return div.innerHTML;
+    }
+
+    function statusClass(statut) {
+        const v = String(statut || '').toLowerCase();
+        if (v.includes('maintenance')) return 'text-bg-warning';
+        if (v.includes('panne') || v.includes('hors') || v.includes('indispo')) return 'text-bg-danger';
+        if (v.includes('dispo')) return 'text-bg-success';
+        return 'text-bg-secondary';
+    }
+
+    function render(machines, fabtrackError) {
+        if (fabtrackError) {
+            grid.innerHTML = `<div style="color: #f87171; font-size: 0.8rem;">${esc(fabtrackError)}</div>`;
+            return;
+        }
+
+        if (!machines.length) {
+            grid.innerHTML = '<div style="color: #475569;">Aucune machine retournee. Verifiez Fabtrack /api/reference.</div>';
+            return;
+        }
+
+        grid.innerHTML = machines.map((m) => `
+            <div class="machine-card">
+                <div class="machine-name">${esc(m.nom || 'Machine')}</div>
+                <span class="badge ${statusClass(m.statut)}">${esc(m.statut || 'inconnu')}</span>
+                ${m.actif === 0 ? '<span class="badge text-bg-dark ms-1">inactive</span>' : ''}
+            </div>
+        `).join('');
+    }
+
+    async function refresh() {
+        try {
+            const resp = await fetch('/api/dashboard/data');
+            const data = await resp.json();
+            render(data.machines || [], data.fabtrack_error || '');
+        } catch (error) {
+            grid.innerHTML = `<div style="color: #f87171;">Erreur: ${esc(error.message)}</div>`;
+        }
+    }
+
+    function onDashboardRefresh() {
+        if (!root.isConnected) {
+            document.removeEventListener('fabboard:refresh', onDashboardRefresh);
+            return;
+        }
+        refresh();
+    }
+
+    document.addEventListener('fabboard:refresh', onDashboardRefresh);
+    refresh();
+})();
+</script>
