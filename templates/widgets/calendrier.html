@@ -31,7 +31,10 @@
 
     function toDate(value) {
         if (!value) return null;
-        const dt = new Date(value.replace(' ', 'T'));
+        let s = value.replace(' ', 'T');
+        // Dates all-day (YYYY-MM-DD) : ajouter T00:00:00 pour éviter l'interprétation UTC
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s += 'T00:00:00';
+        const dt = new Date(s);
         return Number.isNaN(dt.getTime()) ? null : dt;
     }
 

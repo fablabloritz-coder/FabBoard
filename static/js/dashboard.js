@@ -314,7 +314,9 @@ async function displayCurrentSlide() {
             const widgetHTML = await renderWidget(widgetData, slide.id, index);
             injectWidgetHtml(widgetElement, widgetHTML);
         } else {
-            widgetElement.innerHTML = renderEmptyWidget(index);
+            // Emplacement vide → transparent
+            widgetElement.classList.add('widget-slot-empty');
+            widgetElement.innerHTML = '';
         }
     }
     

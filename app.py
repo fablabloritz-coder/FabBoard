@@ -146,14 +146,8 @@ def get_cached_source_data(source_id):
         if not row:
             return None
         
-        # Vérifier si le cache n'a pas expiré
-        expires_at = row['expires_at']
-        if expires_at and datetime.fromisoformat(expires_at) < datetime.now():
-            # Cache expiré, le supprimer
-            db.execute('DELETE FROM sources_cache WHERE source_id = ?', (source_id,))
-            db.commit()
-            return None
-        
+        # Retourner les données même si le cache est expiré (stale-while-revalidate)
+        # Le sync_worker renouvellera le cache en tâche de fond
         return json.loads(row['data_json'])
     except Exception as e:
         print(f'[Cache] Erreur lecture cache source {source_id}: {e}')
@@ -777,6 +771,28 @@ def api_test_source(id):
             _mark_test_result(False, err)
             return jsonify({'success': False, 'error': err, 'url': base_url}), 400
 
+    finally:
+        db.close()
+
+
+@app.route('/api/sources/<int:id>/resync', methods=['POST'])
+def api_resync_source(id):
+    """Force une re-synchronisation immédiate d'une source."""
+    db = get_db()
+    try:
+        source = db.execute('SELECT id FROM sources WHERE id = ?', (id,)).fetchone()
+        if not source:
+            return jsonify({'error': 'Source non trouvée'}), 404
+
+        # Réinitialiser derniere_sync pour forcer le sync_worker à rafraîchir
+        db.execute(
+            "UPDATE sources SET derniere_sync = NULL WHERE id = ?",
+            (id,),
+        )
+        # Supprimer le cache pour forcer un fetch frais
+        db.execute('DELETE FROM sources_cache WHERE source_id = ?', (id,))
+        db.commit()
+        return jsonify({'success': True})
     finally:
         db.close()
 

@@ -15,6 +15,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     await Promise.all([loadParametres(), loadSourceTypes()]);
     await loadSources();
     openCreateSourceModal();
+
+    // Auto-refresh du statut des sources toutes les 30s
+    setInterval(loadSources, 30000);
 });
 
 function setupEventListeners() {
@@ -166,6 +169,9 @@ function renderSourcesTable() {
                         <button class="btn btn-outline-secondary" data-action="toggle" data-id="${source.id}" title="Activer / désactiver">
                             <i class="bi ${source.actif ? 'bi-toggle-on' : 'bi-toggle-off'}"></i>
                         </button>
+                        <button class="btn btn-outline-info" data-action="resync" data-id="${source.id}" title="Forcer re-sync">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </button>
                         <button class="btn btn-outline-primary" data-action="test" data-id="${source.id}" title="Tester la connexion">
                             <i class="bi bi-plug"></i>
                         </button>
@@ -221,6 +227,10 @@ function onSourcesTableClick(event) {
 
     if (action === 'toggle') {
         toggleSourceActive(sourceId, button);
+    }
+
+    if (action === 'resync') {
+        resyncSource(sourceId, button);
     }
 }
 
@@ -442,6 +452,24 @@ async function testSource(sourceId, button = null) {
         showToast(`Test OK${details}`, 'success');
     } catch (error) {
         showToast(`Test KO: ${error.message}`, 'error');
+    } finally {
+        if (button) {
+            setButtonBusy(button, false);
+        }
+        await loadSources();
+    }
+}
+
+async function resyncSource(sourceId, button = null) {
+    if (button) {
+        setButtonBusy(button, true);
+    }
+
+    try {
+        await apiCall(`/api/sources/${sourceId}/resync`, { method: 'POST' });
+        showToast('Re-synchronisation lancée', 'success');
+    } catch (error) {
+        showToast(`Erreur resync: ${error.message}`, 'error');
     } finally {
         if (button) {
             setButtonBusy(button, false);

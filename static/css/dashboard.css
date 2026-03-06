@@ -535,31 +535,63 @@
 }
 
 /* ========== ÉCHELLE GLOBALE DES WIDGETS ========== */
-.dashboard-widget.widget-scale-1   { font-size: 1rem; }
-.dashboard-widget.widget-scale-1-25 { font-size: 1.25rem; }
-.dashboard-widget.widget-scale-1-5 { font-size: 1.5rem; }
-.dashboard-widget.widget-scale-2   { font-size: 2rem; }
-.dashboard-widget.widget-scale-2-5 { font-size: 2.5rem; }
-.dashboard-widget.widget-scale-3   { font-size: 3rem; }
+/* Chaque classe définit la variable --ws utilisée par les propriétés ci-dessous */
+.dashboard-widget.widget-scale-1-25 { --ws: 1.25; }
+.dashboard-widget.widget-scale-1-5  { --ws: 1.5; }
+.dashboard-widget.widget-scale-2    { --ws: 2; }
+.dashboard-widget.widget-scale-2-5  { --ws: 2.5; }
+.dashboard-widget.widget-scale-3    { --ws: 3; }
 
-.dashboard-widget[class*="widget-scale-"] h3 { font-size: 0.55em; }
-.dashboard-widget[class*="widget-scale-"] .compteur-value { font-size: 1.7em; }
-.dashboard-widget[class*="widget-scale-"] .compteur-label { font-size: 0.5em; }
-.dashboard-widget[class*="widget-scale-"] .activite-titre { font-size: 0.6em; }
-.dashboard-widget[class*="widget-scale-"] .activite-meta { font-size: 0.5em; }
-.dashboard-widget[class*="widget-scale-"] .machine-name { font-size: 0.55em; }
-.dashboard-widget[class*="widget-scale-"] .printer-name { font-size: 0.55em; }
-.dashboard-widget[class*="widget-scale-"] .cal-day-header { font-size: 0.6em; }
-.dashboard-widget[class*="widget-scale-"] .cal-event-title { font-size: 0.6em; }
-.dashboard-widget[class*="widget-scale-"] .cal-event-time { font-size: 0.5em; }
-.dashboard-widget[class*="widget-scale-"] .cal-event-location { font-size: 0.45em; }
-.dashboard-widget[class*="widget-scale-"] .badge { font-size: 0.45em; }
+/* --- Tailles texte (uniquement quand --ws est défini) --- */
+.dashboard-widget[class*="widget-scale-"] h3 { font-size: calc(0.85rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .compteur-value { font-size: calc(1.7rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .compteur-label { font-size: calc(0.68rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .compteur-sub { font-size: calc(0.6rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .activite-titre { font-size: calc(0.82rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .activite-meta { font-size: calc(0.75rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .machine-name { font-size: calc(0.8rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .printer-name { font-size: calc(0.8rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .cal-day-header { font-size: calc(0.85rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .cal-event-title { font-size: calc(0.88rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .cal-event-time { font-size: calc(0.78rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .cal-event-location { font-size: calc(0.75rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .badge { font-size: calc(0.7rem * var(--ws)); }
 .dashboard-widget[class*="widget-scale-"] .widget-empty p,
-.dashboard-widget[class*="widget-scale-"] .widget-error p { font-size: 0.55em; }
+.dashboard-widget[class*="widget-scale-"] .widget-error p { font-size: calc(0.82rem * var(--ws)); }
 .dashboard-widget[class*="widget-scale-"] .widget-empty small,
-.dashboard-widget[class*="widget-scale-"] .widget-error small { font-size: 0.45em; }
-.dashboard-widget[class*="widget-scale-"] .horloge-heure { font-size: 1em !important; }
-.dashboard-widget[class*="widget-scale-"] .horloge-date { font-size: 0.4em !important; }
+.dashboard-widget[class*="widget-scale-"] .widget-error small { font-size: calc(0.72rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .type-name { font-size: calc(0.85rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .type-count { font-size: calc(1.1rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .total-row { font-size: calc(0.8rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .total-value { font-size: calc(1rem * var(--ws)); }
+
+/* --- Horloge : multiplier les clamp() --- */
+.dashboard-widget[class*="widget-scale-"] .horloge-heure {
+    font-size: clamp(calc(48px * var(--ws)), calc(8vw * var(--ws)), calc(120px * var(--ws))) !important;
+}
+.dashboard-widget[class*="widget-scale-"] .horloge-date {
+    font-size: clamp(calc(13px * var(--ws)), calc(1.4vw * var(--ws)), calc(20px * var(--ws))) !important;
+}
+.dashboard-widget[class*="widget-scale-"] .horloge-info {
+    font-size: clamp(calc(10px * var(--ws)), calc(1vw * var(--ws)), calc(14px * var(--ws))) !important;
+}
+
+/* --- Météo : multiplier les clamp() --- */
+.dashboard-widget[class*="widget-scale-"] .meteo-icon {
+    font-size: clamp(calc(40px * var(--ws)), calc(5vw * var(--ws)), calc(64px * var(--ws))) !important;
+}
+.dashboard-widget[class*="widget-scale-"] .meteo-temp {
+    font-size: clamp(calc(32px * var(--ws)), calc(5vw * var(--ws)), calc(60px * var(--ws))) !important;
+}
+.dashboard-widget[class*="widget-scale-"] .meteo-description {
+    font-size: clamp(calc(14px * var(--ws)), calc(2vw * var(--ws)), calc(22px * var(--ws))) !important;
+}
+.dashboard-widget[class*="widget-scale-"] .meteo-ville {
+    font-size: clamp(calc(12px * var(--ws)), calc(1.6vw * var(--ws)), calc(16px * var(--ws))) !important;
+}
+.dashboard-widget[class*="widget-scale-"] .meteo-details {
+    font-size: clamp(calc(11px * var(--ws)), calc(1.5vw * var(--ws)), calc(15px * var(--ws))) !important;
+}
 
 /* ========== POLICES PERSONNALISÉES ========== */
 .dashboard-tv.font-inter { font-family: 'Inter', sans-serif; }
@@ -570,6 +602,22 @@
 .dashboard-tv.font-sourcesans { font-family: 'Source Sans 3', sans-serif; }
 .dashboard-tv.font-orbitron { font-family: 'Orbitron', sans-serif; }
 .dashboard-tv.font-rajdhani { font-family: 'Rajdhani', sans-serif; }
+
+/* Police héritée pour l'horloge quand une police custom est choisie */
+.dashboard-tv[class*="font-"] .horloge-heure {
+    font-family: inherit !important;
+}
+.dashboard-tv[class*="font-"] .horloge-date,
+.dashboard-tv[class*="font-"] .horloge-info {
+    font-family: inherit !important;
+}
+
+/* ========== EMPLACEMENTS VIDES (TRANSPARENTS) ========== */
+.dashboard-widget.widget-slot-empty {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
 
 /* ========== URGENCE CALENDRIER ========== */
 .cal-event-card.cal-urgence-critique {

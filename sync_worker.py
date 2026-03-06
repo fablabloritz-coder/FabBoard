@@ -244,16 +244,18 @@ class SyncWorker:
         """Parse un flux iCal et extrait les événements."""
         events = []
         current_event = None
+        last_prop = None
 
         for raw_line in text.splitlines():
             line = raw_line.strip()
-            # Gérer les lignes dépliées (continuation)
-            if raw_line.startswith((' ', '\t')) and current_event is not None:
-                # Continuation de la dernière propriété — ignorer pour simplifier
+            # Gérer les lignes dépliées (continuation RFC 5545)
+            if raw_line.startswith((' ', '\t')) and current_event is not None and last_prop:
+                current_event[last_prop] = current_event.get(last_prop, '') + line
                 continue
 
             if line == 'BEGIN:VEVENT':
                 current_event = {}
+                last_prop = None
             elif line == 'END:VEVENT':
                 if current_event is not None:
                     # N'ajouter que si on a au moins un titre
@@ -272,6 +274,9 @@ class SyncWorker:
                 prop_name = prop_part.split(';')[0].upper()
                 if prop_name in ('SUMMARY', 'DESCRIPTION', 'LOCATION', 'DTSTART', 'DTEND', 'UID'):
                     current_event[prop_name] = value
+                    last_prop = prop_name
+                else:
+                    last_prop = None
 
         # Trier par date de début
         events.sort(key=lambda e: e.get('date_debut') or '')

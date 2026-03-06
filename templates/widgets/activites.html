@@ -26,7 +26,7 @@
         return dt.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     }
 
-    function render(items, fabtrackError) {
+    function render(items, fabtrackError, colorMap) {
         if (fabtrackError && !items.length) {
             list.innerHTML = `<div style="text-align:center; padding:1.5rem; color:#64748b;">
                 <div style="font-size:2rem; margin-bottom:0.5rem;">📋</div>
@@ -41,16 +41,20 @@
             return;
         }
 
-        list.innerHTML = items.slice(0, maxItems).map((item) => `
-            <div class="activite-item">
-                <div class="activite-titre">${esc(item.type_activite_nom || item.nom_type_activite || 'Activite')}</div>
+        colorMap = colorMap || {};
+        list.innerHTML = items.slice(0, maxItems).map((item) => {
+            const typeName = item.type_activite_nom || item.nom_type_activite || 'Activite';
+            const typeColor = colorMap[typeName] || '#818cf8';
+            return `
+            <div class="activite-item" style="border-left: 3px solid ${esc(typeColor)}; padding-left: 0.6rem;">
+                <div class="activite-titre">${esc(typeName)}</div>
                 <div class="activite-meta">
-                    <span class="badge" style="background:#1e293b; color:#94a3b8;">${esc(item.machine_nom || item.nom_machine || 'Machine n/a')}</span>
+                    <span class="badge" style="background:${esc(typeColor)}22; color:${esc(typeColor)};">${esc(item.machine_nom || item.nom_machine || 'Machine n/a')}</span>
                     <span>${esc(item.preparateur_nom || item.nom_preparateur || 'Preparateur n/a')}</span>
                     <span style="color:#475569;">${esc(fmtDate(item.date_saisie || ''))}</span>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
     }
 
     const config = {{ config | tojson | safe }};
@@ -60,17 +64,25 @@
         const store = window.FabBoardStore;
         let items = [];
         let errorMsg = '';
+        let colorMap = {};
 
         if (sourceId && store && store.getSource(sourceId)) {
-            items = store.getSource(sourceId).consommations || [];
+            const sd = store.getSource(sourceId);
+            items = sd.consommations || [];
+            (sd.summary?.by_type || []).forEach(t => {
+                if (t.nom && t.couleur) colorMap[t.nom] = t.couleur;
+            });
         } else if (store && store.data) {
             items = store.data.activites || [];
             errorMsg = store.data.fabtrack_error || '';
+            ((store.data.fabtrack_stats || {}).by_type || []).forEach(t => {
+                if (t.nom && t.couleur) colorMap[t.nom] = t.couleur;
+            });
         } else {
             return;
         }
 
-        render(items, errorMsg);
+        render(items, errorMsg, colorMap);
     }
 
     function onDashboardRefresh() {

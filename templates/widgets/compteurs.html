@@ -44,19 +44,19 @@
         }
         grid.innerHTML = `
             <div class="compteur-item">
-                <div class="compteur-value">${fmtInt(stats.total_interventions)}</div>
+                <div class="compteur-value" style="color:#818cf8">${fmtInt(stats.total_interventions)}</div>
                 <div class="compteur-label"><i class="bi bi-clipboard-check"></i> Interventions</div>
             </div>
             <div class="compteur-item">
-                <div class="compteur-value">${fmtKg(stats.total_3d_grammes)}</div>
+                <div class="compteur-value" style="color:#34d399">${fmtKg(stats.total_3d_grammes)}</div>
                 <div class="compteur-label"><i class="bi bi-filetype-stl"></i> Filament 3D</div>
             </div>
             <div class="compteur-item">
-                <div class="compteur-value">${fmtM2(stats.total_decoupe_m2)}</div>
+                <div class="compteur-value" style="color:#fb923c">${fmtM2(stats.total_decoupe_m2)}</div>
                 <div class="compteur-label"><i class="bi bi-scissors"></i> Surface découpe</div>
             </div>
             <div class="compteur-item">
-                <div class="compteur-value">${fmtInt(stats.total_papier_feuilles)}</div>
+                <div class="compteur-value" style="color:#60a5fa">${fmtInt(stats.total_papier_feuilles)}</div>
                 <div class="compteur-label"><i class="bi bi-file-earmark"></i> Feuilles imprimées</div>
                 <div class="compteur-sub">${fmtInt(stats.total_papier_couleur)} couleur · ${fmtInt(stats.total_papier_nb)} N&B</div>
             </div>
