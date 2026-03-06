@@ -55,12 +55,15 @@
     }
 
     function filterByDays(events) {
-        const now = new Date();
-        const limit = new Date(now);
-        limit.setDate(limit.getDate() + joursAvance);
+        if (!joursAvance) return events;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const limit = new Date(today);
+        limit.setDate(limit.getDate() + joursAvance + 1);
         return events.filter(evt => {
             const dt = toDate(evt.date_debut || evt.start);
-            return dt && dt >= new Date(now.toDateString()) && dt <= limit;
+            if (!dt) return true; // garder les événements sans date parsable
+            return dt >= today && dt < limit;
         });
     }
 
@@ -127,25 +130,18 @@
     }
 
     async function refresh() {
-        try {
-            let events = [];
+        const store = window.FabBoardStore;
+        let events = [];
 
-            if (sourceId) {
-                const resp = await fetch('/api/widget-data/' + sourceId);
-                const result = await resp.json();
-                if (result.success && result.data) {
-                    events = result.data.events || [];
-                }
-            } else {
-                const resp = await fetch('/api/dashboard/data');
-                const data = await resp.json();
-                events = data.evenements || [];
-            }
-
-            render(events);
-        } catch (error) {
-            list.innerHTML = `<div style="color: #f87171; padding:1rem;">Erreur: ${esc(error.message)}</div>`;
+        if (sourceId && store && store.getSource(sourceId)) {
+            events = store.getSource(sourceId).events || [];
+        } else if (store && store.data) {
+            events = store.data.evenements || [];
+        } else {
+            return;
         }
+
+        render(events);
     }
 
     function onDashboardRefresh() {

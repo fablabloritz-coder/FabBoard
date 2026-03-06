@@ -136,30 +136,22 @@
     const config = {{ config | tojson | safe }};
     const sourceId = config.source_id || null;
 
-    async function refresh() {
-        try {
-            let stats = {};
-            let errorMsg = '';
+    function refresh() {
+        const store = window.FabBoardStore;
+        let stats = {};
+        let errorMsg = '';
 
-            if (sourceId) {
-                const resp = await fetch('/api/widget-data/' + sourceId);
-                const result = await resp.json();
-                if (result.success && result.data) {
-                    stats = result.data.summary || result.data;
-                } else {
-                    errorMsg = result.error || 'Pas de données';
-                }
-            } else {
-                const resp = await fetch('/api/dashboard/data');
-                const data = await resp.json();
-                stats = data.fabtrack_stats || {};
-                errorMsg = data.fabtrack_error || '';
-            }
-
-            render(stats, errorMsg);
-        } catch (error) {
-            grid.innerHTML = `<div style="color: #f87171; padding:1rem;">Erreur: ${error.message}</div>`;
+        if (sourceId && store && store.getSource(sourceId)) {
+            const sd = store.getSource(sourceId);
+            stats = sd.summary || sd;
+        } else if (store && store.data) {
+            stats = store.data.fabtrack_stats || {};
+            errorMsg = store.data.fabtrack_error || '';
+        } else {
+            return;
         }
+
+        render(stats, errorMsg);
     }
 
     function onDashboardRefresh() {

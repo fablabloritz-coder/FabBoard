@@ -69,29 +69,20 @@
     const sourceId = config.source_id || null;
 
     async function refresh() {
-        try {
-            let machines = [];
-            let errorMsg = '';
+        const store = window.FabBoardStore;
+        let machines = [];
+        let errorMsg = '';
 
-            if (sourceId) {
-                const resp = await fetch('/api/widget-data/' + sourceId);
-                const result = await resp.json();
-                if (result.success && result.data) {
-                    machines = result.data.machines || [];
-                } else {
-                    errorMsg = result.error || 'Pas de données';
-                }
-            } else {
-                const resp = await fetch('/api/dashboard/data');
-                const data = await resp.json();
-                machines = data.machines || [];
-                errorMsg = data.fabtrack_error || '';
-            }
-
-            render(machines, errorMsg);
-        } catch (error) {
-            grid.innerHTML = `<div style="color: #f87171;">Erreur: ${esc(error.message)}</div>`;
+        if (sourceId && store && store.getSource(sourceId)) {
+            machines = store.getSource(sourceId).machines || [];
+        } else if (store && store.data) {
+            machines = store.data.machines || [];
+            errorMsg = store.data.fabtrack_error || '';
+        } else {
+            return;
         }
+
+        render(machines, errorMsg);
     }
 
     function onDashboardRefresh() {

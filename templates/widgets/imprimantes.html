@@ -64,25 +64,18 @@
     }
 
     async function refresh() {
-        try {
-            let printers = [];
+        const store = window.FabBoardStore;
+        let printers = [];
 
-            if (sourceId) {
-                const resp = await fetch('/api/widget-data/' + sourceId);
-                const result = await resp.json();
-                if (result.success && result.data) {
-                    printers = result.data.printers || [];
-                }
-            } else {
-                const resp = await fetch('/api/dashboard/data');
-                const data = await resp.json();
-                printers = data.imprimantes || [];
-            }
-
-            render(printers);
-        } catch (error) {
-            grid.innerHTML = `<div style="color: #f87171;">Erreur: ${esc(error.message)}</div>`;
+        if (sourceId && store && store.getSource(sourceId)) {
+            printers = store.getSource(sourceId).printers || [];
+        } else if (store && store.data) {
+            printers = store.data.imprimantes || [];
+        } else {
+            return;
         }
+
+        render(printers);
     }
 
     function onDashboardRefresh() {

@@ -1,28 +1,144 @@
 /**
- * DASHBOARD.JS v2.0 — Phase 1 : Widgets Core
- * Système de slides avec rendu dynamique des widgets côté serveur
+ * DASHBOARD.JS v3.0 — Shared Data Store + Slides
+ * Un seul fetch centralisé alimente tous les widgets.
  */
 
 // ========== STATE ==========
 let slides = [];
 let currentSlideIndex = 0;
 let slideTimer = null;
-let widgetRefreshTimer = null;
 let clockTimer = null;
+
+// ========== SHARED DATA STORE ==========
+const FabBoardStore = {
+    /** Données issues de /api/dashboard/data */
+    data: null,
+    /** Données par source : { sourceId: data } */
+    sourceData: {},
+    /** Données météo par ville : { ville: data } */
+    meteoData: {},
+    /** Intervalle de rafraîchissement (secondes) */
+    refreshInterval: 30,
+    /** IDs de sources utilisées par les widgets courants */
+    _sourceIds: new Set(),
+    /** Villes météo utilisées par les widgets courants */
+    _meteoVilles: new Set(),
+    _timer: null,
+
+    /** Initialise le store : charge le refresh_interval puis fetch tout. */
+    async init() {
+        try {
+            const resp = await fetch('/api/parametres');
+            const params = await resp.json();
+            if (params.refresh_interval) {
+                this.refreshInterval = Math.max(10, parseInt(params.refresh_interval) || 30);
+            }
+        } catch (e) { /* default 30s */ }
+
+        await this.fetchAll();
+        this._startLoop();
+    },
+
+    /** Enregistre un source_id à pré-charger. */
+    registerSource(id) { if (id) this._sourceIds.add(id); },
+
+    /** Enregistre une ville météo à pré-charger. */
+    registerMeteo(ville) { if (ville) this._meteoVilles.add(ville); },
+
+    /** Collecte les source_ids et villes depuis les widgets de toutes les slides. */
+    collectFromSlides(allSlides) {
+        this._sourceIds.clear();
+        this._meteoVilles.clear();
+        for (const slide of allSlides) {
+            for (const w of (slide.widgets || [])) {
+                const cfg = JSON.parse(w.config_json || '{}');
+                if (cfg.source_id) this._sourceIds.add(cfg.source_id);
+                if (w.widget_code === 'meteo') {
+                    this._meteoVilles.add(cfg.ville || 'Nancy, FR');
+                }
+            }
+        }
+    },
+
+    /** Charge toutes les données en une seule passe. */
+    async fetchAll() {
+        const promises = [];
+
+        // 1) Données dashboard principales
+        promises.push(
+            fetch('/api/dashboard/data')
+                .then(r => r.json())
+                .then(d => { this.data = d; })
+                .catch(e => console.error('Store: erreur dashboard/data', e))
+        );
+
+        // 2) Données par source
+        for (const sid of this._sourceIds) {
+            promises.push(
+                fetch('/api/widget-data/' + sid)
+                    .then(r => r.json())
+                    .then(result => {
+                        if (result.success && result.data) {
+                            this.sourceData[sid] = result.data;
+                        }
+                    })
+                    .catch(e => console.error('Store: erreur source', sid, e))
+            );
+        }
+
+        // 3) Météo par ville
+        for (const ville of this._meteoVilles) {
+            promises.push(
+                fetch('/api/meteo?ville=' + encodeURIComponent(ville))
+                    .then(r => r.json())
+                    .then(result => {
+                        if (result.success && result.data) {
+                            this.meteoData[ville] = result.data;
+                        }
+                    })
+                    .catch(e => console.error('Store: erreur meteo', ville, e))
+            );
+        }
+
+        await Promise.all(promises);
+
+        // Notifier tous les widgets
+        document.dispatchEvent(new CustomEvent('fabboard:refresh'));
+    },
+
+    /** Raccourci : clé depuis data principale. */
+    get(key) { return this.data ? this.data[key] : null; },
+
+    /** Raccourci : données d'une source. */
+    getSource(sid) { return this.sourceData[sid] || null; },
+
+    /** Raccourci : données météo d'une ville. */
+    getMeteo(ville) { return this.meteoData[ville] || null; },
+
+    _startLoop() {
+        if (this._timer) clearInterval(this._timer);
+        this._timer = setInterval(() => this.fetchAll(), this.refreshInterval * 1000);
+    }
+};
+window.FabBoardStore = FabBoardStore;
 
 // ========== INIT ==========
 document.addEventListener('DOMContentLoaded', async () => {
     // Démarrer l'horloge globale
     startClockTimer();
-    
+
     // Charger le thème
     await loadThemeSettings();
-    
+
     // Charger les slides
     await loadSlides();
-    
-    // Démarrer le cycle
+
     if (slides.length > 0) {
+        // Collecter les sources nécessaires et initialiser le store
+        FabBoardStore.collectFromSlides(slides);
+        await FabBoardStore.init();
+
+        // Démarrer le cycle de slides
         await startSlideCycle();
     } else {
         showEmptyState();
@@ -90,29 +206,20 @@ async function startSlideCycle() {
     await displayCurrentSlide();
     
     // Si une seule slide, pas de cycle automatique
-    if (slides.length === 1) {
-        startWidgetRefresh();
-        return;
-    }
+    if (slides.length === 1) return;
     
     // Démarrer le cycle automatique
     const currentSlide = slides[currentSlideIndex];
     slideTimer = setTimeout(() => {
         nextSlide();
     }, currentSlide.temps_affichage * 1000);
-    
-    startWidgetRefresh();
 }
 
 async function nextSlide() {
-    // Arrêter les timers
     if (slideTimer) clearTimeout(slideTimer);
-    if (widgetRefreshTimer) clearInterval(widgetRefreshTimer);
     
-    // Avancer l'index
     currentSlideIndex = (currentSlideIndex + 1) % slides.length;
     
-    // Transition visuelle
     const container = document.getElementById('dashboard-container');
     container.classList.add('slide-transition');
     
@@ -120,23 +227,11 @@ async function nextSlide() {
         await displayCurrentSlide();
         container.classList.remove('slide-transition');
         
-        // Relancer le cycle
         const currentSlide = slides[currentSlideIndex];
         slideTimer = setTimeout(() => {
             nextSlide();
         }, currentSlide.temps_affichage * 1000);
-        
-        startWidgetRefresh();
     }, 500);
-}
-
-function startWidgetRefresh() {
-    // Rafraîchir automatiquement les widgets toutes les 10 secondes
-    if (widgetRefreshTimer) clearInterval(widgetRefreshTimer);
-    
-    widgetRefreshTimer = setInterval(() => {
-        refreshCurrentSlideWidgets();
-    }, 10000);
 }
 
 // ========== AFFICHAGE DE LA SLIDE ==========
@@ -267,11 +362,7 @@ function renderWidgetError(widgetData, errorMsg) {
 }
 
 // ========== RAFRAÎCHISSEMENT DES WIDGETS ==========
-async function refreshCurrentSlideWidgets() {
-    // Horloge globale + signal de refresh pour les scripts widgets.
-    updateClock();
-    document.dispatchEvent(new CustomEvent('fabboard:refresh'));
-}
+// Le FabBoardStore gère le refresh périodique et dispatch 'fabboard:refresh'.
 
 // ========== HORLOGE GLOBALE ==========
 function updateClock() {
