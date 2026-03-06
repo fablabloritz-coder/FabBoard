@@ -25,6 +25,7 @@ let currentWidgets = [];
 let selectedSlideId = null;
 let sortableInstance = null;
 let isRenderingSlides = false; // Flag pour éviter les rendus concurrents
+let currentEditingWidgetConfig = null; // Contexte d'édition config avancée
 
 // ========== INIT ==========
 document.addEventListener('DOMContentLoaded', () => {
@@ -32,6 +33,14 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
         setupEventListeners();
         loadInitialData();
+        
+        // Réinitialiser le mode config avancée quand le modal se ferme
+        const wcModal = document.getElementById('widgetConfigModal');
+        if (wcModal) {
+            wcModal.addEventListener('hidden.bs.modal', function() {
+                currentEditingWidgetConfig = null;
+            });
+        }
     } catch (error) {
         console.error('[SLIDES] Erreur fatale lors de l\'initialisation:', error);
         const container = document.getElementById('slidesList');
@@ -676,6 +685,12 @@ function selectWidget(widgetId) {
 }
 
 async function saveWidgetConfig() {
+    // Mode configuration avancée
+    if (currentEditingWidgetConfig) {
+        return saveWidgetAdvancedConfig();
+    }
+    
+    // Mode sélection de widget
     if (!currentEditingPosition) return;
     
     const selectedWidget = document.querySelector('.widget-option.selected');
@@ -738,9 +753,269 @@ async function saveWidgetConfig() {
     }
 }
 
+// ========== CONFIGURATION AVANCÉE DES WIDGETS ==========
+
+/**
+ * Définitions des options de configuration par type de widget
+ */
+const WIDGET_CONFIG_DEFINITIONS = {
+    horloge: {
+        titre: 'Horloge',
+        fields: [
+            { key: 'format', label: 'Format horaire', type: 'select', options: [
+                { value: '24h', label: '24 heures' },
+                { value: '12h', label: '12 heures (AM/PM)' }
+            ], default: '24h' },
+            { key: 'afficher_secondes', label: 'Afficher les secondes', type: 'checkbox', default: true },
+            { key: 'afficher_date', label: 'Afficher la date', type: 'checkbox', default: true }
+        ]
+    },
+    texte_libre: {
+        titre: 'Texte libre',
+        fields: [
+            { key: 'titre', label: 'Titre', type: 'text', default: 'Information', placeholder: 'Titre du bloc' },
+            { key: 'texte', label: 'Contenu', type: 'textarea', default: '', placeholder: 'Texte à afficher...' },
+            { key: 'taille_texte', label: 'Taille du texte', type: 'select', options: [
+                { value: 'small', label: 'Petit' },
+                { value: 'normal', label: 'Normal' },
+                { value: 'large', label: 'Grand' },
+                { value: 'xlarge', label: 'Très grand' }
+            ], default: 'normal' },
+            { key: 'alignement', label: 'Alignement', type: 'select', options: [
+                { value: 'left', label: 'Gauche' },
+                { value: 'center', label: 'Centré' },
+                { value: 'right', label: 'Droite' }
+            ], default: 'left' }
+        ]
+    },
+    compteurs: {
+        titre: 'Compteurs Fabtrack',
+        fields: [
+            { key: 'afficher_en_attente', label: 'Afficher "À faire"', type: 'checkbox', default: true },
+            { key: 'afficher_en_cours', label: 'Afficher "En cours"', type: 'checkbox', default: true },
+            { key: 'afficher_termines', label: 'Afficher "Terminées"', type: 'checkbox', default: true }
+        ]
+    },
+    activites: {
+        titre: 'Activités Fabtrack',
+        fields: [
+            { key: 'nombre_max', label: "Nombre max d'activités", type: 'number', default: 5, min: 1, max: 20 },
+            { key: 'filtre_urgence', label: 'Filtrer par urgence', type: 'select', options: [
+                { value: '', label: 'Toutes' },
+                { value: 'haute', label: 'Haute uniquement' },
+                { value: 'moyenne', label: 'Moyenne et +' },
+                { value: 'basse', label: 'Basse et +' }
+            ], default: '' }
+        ]
+    },
+    calendrier: {
+        titre: 'Événements calendrier',
+        fields: [
+            { key: 'nombre_max', label: "Nombre max d'événements", type: 'number', default: 5, min: 1, max: 15 },
+            { key: 'jours_avance', label: "Jours à l'avance", type: 'number', default: 7, min: 1, max: 30 }
+        ]
+    },
+    meteo: {
+        titre: 'Météo',
+        fields: [
+            { key: 'ville', label: 'Ville', type: 'text', default: '', placeholder: 'Ex: Nancy, FR' },
+            { key: 'unite', label: 'Unité', type: 'select', options: [
+                { value: 'celsius', label: 'Celsius (°C)' },
+                { value: 'fahrenheit', label: 'Fahrenheit (°F)' }
+            ], default: 'celsius' }
+        ]
+    },
+    fabtrack_stats: {
+        titre: 'Stats Fabtrack',
+        fields: [
+            { key: 'periode', label: 'Période', type: 'select', options: [
+                { value: 'jour', label: "Aujourd'hui" },
+                { value: 'semaine', label: 'Cette semaine' },
+                { value: 'mois', label: 'Ce mois' }
+            ], default: 'jour' }
+        ]
+    },
+    fabtrack_machines: {
+        titre: 'État machines',
+        fields: [
+            { key: 'afficher_inactives', label: 'Afficher les machines inactives', type: 'checkbox', default: false }
+        ]
+    },
+    fabtrack_conso: {
+        titre: 'Dernières consommations',
+        fields: [
+            { key: 'nombre_max', label: 'Nombre max', type: 'number', default: 5, min: 1, max: 20 }
+        ]
+    },
+    imprimantes: {
+        titre: 'Imprimantes 3D',
+        fields: [
+            { key: 'afficher_inactives', label: 'Afficher les imprimantes hors-ligne', type: 'checkbox', default: false }
+        ]
+    }
+};
+
 function configureWidget(slideId, position) {
-    // TODO: Ouvrir modal de configuration avancée du widget
-    showToast('Configuration avancée à venir', 'info');
+    const slide = currentSlides.find(s => s.id === slideId);
+    if (!slide) return;
+    
+    const widget = slide.widgets.find(w => w.position === position);
+    if (!widget) {
+        showToast('Aucun widget à cette position', 'warning');
+        return;
+    }
+    
+    const widgetCode = widget.widget_code;
+    const configDef = WIDGET_CONFIG_DEFINITIONS[widgetCode];
+    
+    if (!configDef || configDef.fields.length === 0) {
+        showToast('Aucune option de configuration pour ce widget', 'info');
+        return;
+    }
+    
+    // Charger la config existante
+    let currentConfig = {};
+    try { currentConfig = JSON.parse(widget.config_json || '{}'); } catch(e) {}
+    
+    // Stocker le contexte d'édition
+    currentEditingWidgetConfig = { slideId, position, widgetCode };
+    
+    // Construire le formulaire
+    const formEl = document.getElementById('widgetConfigForm');
+    formEl.innerHTML = buildWidgetConfigForm(configDef, currentConfig);
+    
+    // Mettre à jour le titre du modal
+    const modalTitle = document.querySelector('#widgetConfigModal .modal-title');
+    modalTitle.textContent = 'Configurer : ' + configDef.titre;
+    
+    // Ouvrir le modal
+    const modal = new bootstrap.Modal(document.getElementById('widgetConfigModal'));
+    modal.show();
+}
+
+function buildWidgetConfigForm(configDef, currentConfig) {
+    return configDef.fields.map(field => {
+        const value = currentConfig[field.key] !== undefined ? currentConfig[field.key] : field.default;
+        
+        switch (field.type) {
+            case 'text':
+                return '<div class="mb-3">' +
+                    '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                    '<input type="text" class="form-control" data-config-key="' + field.key + '" ' +
+                    'value="' + escapeHtml(String(value || '')) + '" ' +
+                    'placeholder="' + escapeHtml(field.placeholder || '') + '">' +
+                    '</div>';
+            
+            case 'number':
+                return '<div class="mb-3">' +
+                    '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                    '<input type="number" class="form-control" data-config-key="' + field.key + '" ' +
+                    'value="' + value + '" ' +
+                    (field.min !== undefined ? 'min="' + field.min + '" ' : '') +
+                    (field.max !== undefined ? 'max="' + field.max + '" ' : '') + '>' +
+                    '</div>';
+            
+            case 'textarea':
+                return '<div class="mb-3">' +
+                    '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                    '<textarea class="form-control" data-config-key="' + field.key + '" rows="4" ' +
+                    'placeholder="' + escapeHtml(field.placeholder || '') + '">' +
+                    escapeHtml(String(value || '')) + '</textarea>' +
+                    '</div>';
+            
+            case 'select':
+                return '<div class="mb-3">' +
+                    '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                    '<select class="form-select" data-config-key="' + field.key + '">' +
+                    field.options.map(function(opt) {
+                        return '<option value="' + escapeHtml(opt.value) + '"' +
+                            (String(value) === String(opt.value) ? ' selected' : '') + '>' +
+                            escapeHtml(opt.label) + '</option>';
+                    }).join('') +
+                    '</select>' +
+                    '</div>';
+            
+            case 'checkbox':
+                return '<div class="mb-3">' +
+                    '<div class="form-check form-switch">' +
+                    '<input class="form-check-input" type="checkbox" data-config-key="' + field.key + '" ' +
+                    (value ? 'checked' : '') + '>' +
+                    '<label class="form-check-label">' + escapeHtml(field.label) + '</label>' +
+                    '</div>' +
+                    '</div>';
+            
+            default:
+                return '';
+        }
+    }).join('');
+}
+
+async function saveWidgetAdvancedConfig() {
+    if (!currentEditingWidgetConfig) return;
+    
+    const { slideId, position, widgetCode } = currentEditingWidgetConfig;
+    const configDef = WIDGET_CONFIG_DEFINITIONS[widgetCode];
+    if (!configDef) return;
+    
+    // Collecter les valeurs du formulaire
+    const newConfig = {};
+    const formEl = document.getElementById('widgetConfigForm');
+    
+    configDef.fields.forEach(function(field) {
+        const input = formEl.querySelector('[data-config-key="' + field.key + '"]');
+        if (!input) return;
+        
+        switch (field.type) {
+            case 'checkbox':
+                newConfig[field.key] = input.checked;
+                break;
+            case 'number':
+                newConfig[field.key] = parseInt(input.value) || field.default;
+                break;
+            default:
+                newConfig[field.key] = input.value;
+                break;
+        }
+    });
+    
+    try {
+        // Mettre à jour la config du widget dans la slide
+        const slide = currentSlides.find(s => s.id === slideId);
+        const widget = slide.widgets.find(w => w.position === position);
+        widget.config_json = JSON.stringify(newConfig);
+        
+        // Sauvegarder via l'API
+        await apiCall('/api/slides/' + slideId, 'PUT', {
+            nom: slide.nom,
+            layout_id: slide.layout_id,
+            temps_affichage: slide.temps_affichage,
+            actif: slide.actif,
+            widgets: slide.widgets.map(function(w) {
+                return {
+                    widget_id: w.widget_id,
+                    position: w.position,
+                    config: JSON.parse(w.config_json || '{}')
+                };
+            })
+        });
+        
+        // Rafraîchir les données
+        const updatedSlide = await apiCall('/api/slides/' + slideId);
+        const index = currentSlides.findIndex(s => s.id === slideId);
+        currentSlides[index] = updatedSlide.data;
+        
+        renderPreview();
+        renderConfig();
+        
+        bootstrap.Modal.getInstance(document.getElementById('widgetConfigModal')).hide();
+        showToast('Configuration sauvegardée', 'success');
+        
+    } catch (error) {
+        showToast('Erreur lors de la sauvegarde', 'error');
+        console.error(error);
+    }
+    
+    currentEditingWidgetConfig = null;
 }
 
 async function removeWidget(slideId, position) {

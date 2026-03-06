@@ -81,14 +81,14 @@
     
     <!-- Horloge navbar -->
     <script>
-        function updateClock() {
+        function updateNavbarClock() {
             const now = new Date();
             const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
             const el = document.getElementById('navbar-clock');
             if (el) el.textContent = timeStr;
         }
-        updateClock();
-        setInterval(updateClock, 1000);
+        updateNavbarClock();
+        setInterval(updateNavbarClock, 1000);
         
         // ========== SYSTÈME DE THÈME CLAIR/SOMBRE ==========
         let currentTheme = 'dark';

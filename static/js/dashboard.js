@@ -10,7 +10,12 @@ let slideTimer = null;
 let widgetRefreshTimer = null;
 
 // ========== INIT ==========
+let clockTimer = null;
+
 document.addEventListener('DOMContentLoaded', async () => {
+    // Horloge temps réel — démarrer immédiatement, avant tout le reste
+    startClockTimer();
+    
     // Charger le thème
     await loadThemeSettings();
     
@@ -18,16 +23,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadSlides();
     
     // Démarrer le cycle
-    if (slides.length > 0) {
-        startSlideCycle();
-    } else {
-        showEmptyState();
+    try {
+        if (slides.length > 0) {
+            startSlideCycle();
+        } else {
+            showEmptyState();
+        }
+    } catch (error) {
+        console.error('Erreur démarrage cycle slides:', error);
     }
-    
-    // Horloge
-    updateClock();
-    setInterval(updateClock, 1000);
 });
+
+function startClockTimer() {
+    if (clockTimer) clearInterval(clockTimer);
+    clockTimer = setInterval(updateClock, 1000);
+}
 
 // ========== THÈME ==========
 async function loadThemeSettings() {
@@ -178,6 +188,9 @@ function displayCurrentSlide() {
     
     // Charger les données des widgets
     refreshCurrentSlideWidgets();
+    
+    // Mettre à jour l'horloge immédiatement après le rendu
+    updateClock();
 }
 
 function renderEmptyWidget(position) {
@@ -195,33 +208,34 @@ function renderWidget(widgetData) {
     
     switch (widgetCode) {
         case 'compteurs':
-            return renderWidgetCompteurs();
+            return renderWidgetCompteurs(widgetData);
         case 'activites':
-            return renderWidgetActivites();
+            return renderWidgetActivites(widgetData);
         case 'horloge':
-            return renderWidgetHorloge();
+            return renderWidgetHorloge(widgetData);
         case 'calendrier':
-            return renderWidgetCalendrier();
+            return renderWidgetCalendrier(widgetData);
         case 'fabtrack_stats':
-            return renderWidgetFabtrackStats();
+            return renderWidgetFabtrackStats(widgetData);
         case 'fabtrack_machines':
-            return renderWidgetFabtrackMachines();
+            return renderWidgetFabtrackMachines(widgetData);
         case 'fabtrack_conso':
-            return renderWidgetFabtrackConso();
+            return renderWidgetFabtrackConso(widgetData);
         case 'imprimantes':
-            return renderWidgetImprimantes();
+            return renderWidgetImprimantes(widgetData);
         case 'meteo':
-            return renderWidgetMeteo();
+            return renderWidgetMeteo(widgetData);
         case 'texte_libre':
             return renderWidgetTexteLibre(widgetData);
         default:
-            return `<div class="widget-placeholder">${widgetData.icone} ${widgetData.widget_nom}</div>`;
+            return '<div class="widget-placeholder">' + widgetData.icone + ' ' + widgetData.widget_nom + '</div>';
     }
 }
 
-function renderWidgetCompteurs() {
+function renderWidgetCompteurs(widgetData) {
+    const config = JSON.parse((widgetData && widgetData.config_json) || '{}');
     return `
-        <div class="widget-compteurs">
+        <div class="widget-compteurs" data-config='${JSON.stringify(config).replace(/'/g, "&#39;")}'>
             <h3><i class="bi bi-bar-chart"></i> Activités</h3>
             <div class="compteurs-grid" id="widget-compteurs-data">
                 <div class="spinner-border" role="status"></div>
@@ -230,9 +244,10 @@ function renderWidgetCompteurs() {
     `;
 }
 
-function renderWidgetActivites() {
+function renderWidgetActivites(widgetData) {
+    const config = JSON.parse((widgetData && widgetData.config_json) || '{}');
     return `
-        <div class="widget-activites">
+        <div class="widget-activites" data-config='${JSON.stringify(config).replace(/'/g, "&#39;")}'>
             <h3><i class="bi bi-list-check"></i> Activités en cours</h3>
             <div class="activites-list" id="widget-activites-data">
                 <div class="spinner-border" role="status"></div>
@@ -241,16 +256,34 @@ function renderWidgetActivites() {
     `;
 }
 
-function renderWidgetHorloge() {
+function renderWidgetHorloge(widgetData) {
+    const config = JSON.parse((widgetData && widgetData.config_json) || '{}');
+    const now = new Date();
+    
+    // Options configurables
+    const format24h = config.format !== '12h';
+    const afficherSecondes = config.afficher_secondes !== false;
+    const afficherDate = config.afficher_date !== false;
+    
+    // Formatage de l'heure
+    let timeOptions = { hour: '2-digit', minute: '2-digit', hour12: !format24h };
+    if (afficherSecondes) timeOptions.second = '2-digit';
+    const timeStr = now.toLocaleTimeString('fr-FR', timeOptions);
+    
+    // Formatage de la date
+    const dateStr = now.toLocaleDateString('fr-FR', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+    
     return `
-        <div class="widget-horloge">
-            <div class="horloge-time" id="widget-horloge-time">--:--:--</div>
-            <div class="horloge-date" id="widget-horloge-date">--</div>
+        <div class="widget-horloge" data-config='${JSON.stringify(config).replace(/'/g, "&#39;")}'>
+            <div class="horloge-time" id="widget-horloge-time">${timeStr}</div>
+            ${afficherDate ? '<div class="horloge-date" id="widget-horloge-date">' + dateStr + '</div>' : ''}
         </div>
     `;
 }
 
-function renderWidgetCalendrier() {
+function renderWidgetCalendrier(widgetData) {
     return `
         <div class="widget-calendrier">
             <h3><i class="bi bi-calendar"></i> Événements à venir</h3>
@@ -261,7 +294,7 @@ function renderWidgetCalendrier() {
     `;
 }
 
-function renderWidgetFabtrackStats() {
+function renderWidgetFabtrackStats(widgetData) {
     return `
         <div class="widget-fabtrack-stats">
             <h3><i class="bi bi-graph-up"></i> Fabtrack</h3>
@@ -272,7 +305,7 @@ function renderWidgetFabtrackStats() {
     `;
 }
 
-function renderWidgetFabtrackMachines() {
+function renderWidgetFabtrackMachines(widgetData) {
     return `
         <div class="widget-fabtrack-machines">
             <h3><i class="bi bi-tools"></i> Machines</h3>
@@ -283,7 +316,7 @@ function renderWidgetFabtrackMachines() {
     `;
 }
 
-function renderWidgetFabtrackConso() {
+function renderWidgetFabtrackConso(widgetData) {
     return `
         <div class="widget-fabtrack-conso">
             <h3><i class="bi bi-receipt"></i> Dernières consommations</h3>
@@ -294,7 +327,7 @@ function renderWidgetFabtrackConso() {
     `;
 }
 
-function renderWidgetImprimantes() {
+function renderWidgetImprimantes(widgetData) {
     return `
         <div class="widget-imprimantes">
             <h3><i class="bi bi-printer"></i> Imprimantes 3D</h3>
@@ -305,7 +338,7 @@ function renderWidgetImprimantes() {
     `;
 }
 
-function renderWidgetMeteo() {
+function renderWidgetMeteo(widgetData) {
     return `
         <div class="widget-meteo">
             <h3><i class="bi bi-cloud-sun"></i> Météo</h3>
@@ -318,11 +351,15 @@ function renderWidgetMeteo() {
 
 function renderWidgetTexteLibre(widgetData) {
     const config = JSON.parse(widgetData.config_json || '{}');
+    const taille = config.taille_texte || 'normal';
+    const alignement = config.alignement || 'left';
+    const tailleMap = { small: '0.875rem', normal: '1.125rem', large: '1.5rem', xlarge: '2rem' };
+    const fontSize = tailleMap[taille] || tailleMap.normal;
     return `
         <div class="widget-texte-libre">
-            <h3>${config.titre || 'Information'}</h3>
-            <div class="texte-content">
-                ${config.texte || 'Texte personnalisé'}
+            <h3>${escapeHtml(config.titre || 'Information')}</h3>
+            <div class="texte-content" style="font-size:${fontSize}; text-align:${alignement}; line-height:1.6;">
+                ${escapeHtml(config.texte || 'Texte personnalisé')}
             </div>
         </div>
     `;
@@ -421,16 +458,29 @@ function refreshWidgetHorloge() {
     const elTime = document.getElementById('widget-horloge-time');
     const elDate = document.getElementById('widget-horloge-date');
     
-    if (!elTime || !elDate) return;
+    if (!elTime) return;
+    
+    // Lire la config depuis le DOM
+    const horlogeEl = document.querySelector('.widget-horloge');
+    let config = {};
+    if (horlogeEl && horlogeEl.dataset.config) {
+        try { config = JSON.parse(horlogeEl.dataset.config); } catch(e) {}
+    }
     
     const now = new Date();
-    elTime.textContent = now.toLocaleTimeString('fr-FR');
-    elDate.textContent = now.toLocaleDateString('fr-FR', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-    });
+    const format24h = config.format !== '12h';
+    const afficherSecondes = config.afficher_secondes !== false;
+    
+    let timeOptions = { hour: '2-digit', minute: '2-digit', hour12: !format24h };
+    if (afficherSecondes) timeOptions.second = '2-digit';
+    
+    elTime.textContent = now.toLocaleTimeString('fr-FR', timeOptions);
+    
+    if (elDate) {
+        elDate.textContent = now.toLocaleDateString('fr-FR', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+        });
+    }
 }
 
 async function refreshWidgetCalendrier() {
@@ -456,5 +506,9 @@ async function refreshWidgetImprimantes() {
 
 // ========== HORLOGE GLOBALE ==========
 function updateClock() {
-    refreshWidgetHorloge();
+    try {
+        refreshWidgetHorloge();
+    } catch (e) {
+        // Silencieux — ne pas bloquer le timer
+    }
 }
