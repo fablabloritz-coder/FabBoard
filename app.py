@@ -14,6 +14,7 @@ from datetime import datetime
 import os
 import json
 import secrets
+import requests
 
 app = Flask(__name__)
 
@@ -70,6 +71,72 @@ def rows_to_list(rows):
     return [dict(r) for r in rows]
 
 
+def _normalize_base_url(url):
+    """Normalise une URL de base en supprimant le slash final."""
+    if not url:
+        return ''
+    return url.strip().rstrip('/')
+
+
+def _get_active_source_url(source_type):
+    """Retourne l'URL d'une source active par type, sinon chaîne vide."""
+    db = get_db()
+    try:
+        row = db.execute(
+            'SELECT url FROM sources WHERE type = ? AND actif = 1 ORDER BY id LIMIT 1',
+            (source_type,),
+        ).fetchone()
+        return _normalize_base_url(row['url']) if row else ''
+    finally:
+        db.close()
+
+
+def _resolve_fabtrack_base_url():
+    """Résout l'URL de Fabtrack via sources DB puis variable d'environnement."""
+    from_db = _get_active_source_url('fabtrack')
+    if from_db:
+        return from_db
+    from_env = os.environ.get('FABTRACK_URL', 'http://localhost:5555')
+    return _normalize_base_url(from_env)
+
+
+def _request_json(base_url, path, timeout=4):
+    """Exécute une requête GET JSON et retourne (ok, data, erreur)."""
+    url = f"{_normalize_base_url(base_url)}{path}"
+    try:
+        response = requests.get(url, timeout=timeout)
+        response.raise_for_status()
+        return True, response.json(), ''
+    except requests.RequestException as e:
+        return False, None, str(e)
+
+
+def _extract_fabtrack_payload(base_url):
+    """Agrège les données nécessaires au dashboard depuis Fabtrack."""
+    ok_summary, summary, err_summary = _request_json(base_url, '/api/stats/summary')
+    ok_conso, conso, err_conso = _request_json(base_url, '/api/consommations?per_page=5&page=1')
+
+    if not ok_summary and not ok_conso:
+        return None, f"Fabtrack indisponible: {err_summary or err_conso}"
+
+    summary = summary or {}
+    conso = conso or {}
+
+    compteurs = {
+        'interventions_total': summary.get('total_interventions', 0),
+        'impression_3d_grammes': summary.get('total_3d_grammes', 0),
+        'decoupe_m2': summary.get('total_decoupe_m2', 0),
+        'papier_feuilles': summary.get('total_papier_feuilles', 0),
+    }
+
+    return {
+        'compteurs': compteurs,
+        'fabtrack_stats': summary,
+        'activites': conso.get('data', []),
+        'source_url': base_url,
+    }, ''
+
+
 # ============================================================
 # PAGES
 # ============================================================
@@ -109,16 +176,33 @@ def api_dashboard_data():
     - Événements → CalDAV (Phase 3)
     - Imprimantes → Repetier/PrusaLink (Phase 4)
     """
+    base_url = _resolve_fabtrack_base_url()
+    payload, error = _extract_fabtrack_payload(base_url)
+
+    if payload is None:
+        return jsonify({
+            'activites': [],
+            'compteurs': {
+                'interventions_total': 0,
+                'impression_3d_grammes': 0,
+                'decoupe_m2': 0,
+                'papier_feuilles': 0,
+            },
+            'evenements': [],  # TODO Phase 3
+            'fabtrack_stats': {},
+            'imprimantes': [],  # TODO Phase 4
+            'fabtrack_error': error,
+            'fabtrack_url': base_url,
+            'timestamp': datetime.now().isoformat()
+        })
+
     return jsonify({
-        'activites': [],  # TODO Phase 2: Depuis Fabtrack
-        'compteurs': {    # TODO Phase 2: Depuis Fabtrack
-            'en_attente': 0,
-            'en_cours': 0,
-            'termine': 0
-        },
-        'evenements': [],  # TODO Phase 3: Depuis CalDAV
-        'fabtrack_stats': {},  # TODO Phase 2: Depuis Fabtrack
-        'imprimantes': [],  # TODO Phase 4: Depuis Repetier
+        'activites': payload['activites'],
+        'compteurs': payload['compteurs'],
+        'evenements': [],  # TODO Phase 3
+        'fabtrack_stats': payload['fabtrack_stats'],
+        'imprimantes': [],  # TODO Phase 4
+        'fabtrack_url': payload['source_url'],
         'timestamp': datetime.now().isoformat()
     })
 
@@ -250,6 +334,48 @@ def api_delete_source(id):
             return jsonify({'error': 'Source non trouvée'}), 404
         
         return jsonify({'success': True})
+    finally:
+        db.close()
+
+
+@app.route('/api/sources/<int:id>/test', methods=['POST'])
+def api_test_source(id):
+    """Teste la connectivité d'une source configurée."""
+    db = get_db()
+    try:
+        source = db.execute('SELECT * FROM sources WHERE id = ?', (id,)).fetchone()
+        if not source:
+            return jsonify({'error': 'Source non trouvée'}), 404
+
+        source = dict(source)
+        base_url = _normalize_base_url(source.get('url', ''))
+
+        if source['type'] == 'fabtrack':
+            ok, data, err = _request_json(base_url, '/api/stats/summary')
+            if not ok:
+                db.execute(
+                    "UPDATE sources SET derniere_erreur = ? WHERE id = ?",
+                    (err[:500], id),
+                )
+                db.commit()
+                return jsonify({'success': False, 'error': err, 'url': base_url}), 400
+
+            db.execute(
+                "UPDATE sources SET derniere_sync = datetime('now','localtime'), derniere_erreur = '' WHERE id = ?",
+                (id,),
+            )
+            db.commit()
+            return jsonify({
+                'success': True,
+                'url': base_url,
+                'summary': {
+                    'total_interventions': data.get('total_interventions', 0),
+                    'total_3d_grammes': data.get('total_3d_grammes', 0),
+                    'total_decoupe_m2': data.get('total_decoupe_m2', 0),
+                },
+            })
+
+        return jsonify({'success': False, 'error': f"Type non encore testé automatiquement: {source['type']}"}), 400
     finally:
         db.close()
 

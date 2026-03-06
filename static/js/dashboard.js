@@ -411,16 +411,20 @@ async function refreshWidgetCompteurs() {
         
         el.innerHTML = `
             <div class="compteur-item">
-                <div class="compteur-value">${compteurs.en_attente_total || 0}</div>
-                <div class="compteur-label">Par faire</div>
+                <div class="compteur-value">${compteurs.interventions_total || 0}</div>
+                <div class="compteur-label">Interventions</div>
             </div>
             <div class="compteur-item">
-                <div class="compteur-value">${compteurs.en_cours_total || 0}</div>
-                <div class="compteur-label">En cours</div>
+                <div class="compteur-value">${compteurs.impression_3d_grammes || 0}</div>
+                <div class="compteur-label">3D (g)</div>
             </div>
             <div class="compteur-item">
-                <div class="compteur-value">${compteurs.termine_jour || 0}</div>
-                <div class="compteur-label">Terminées (aujourd'hui)</div>
+                <div class="compteur-value">${compteurs.decoupe_m2 || 0}</div>
+                <div class="compteur-label">Découpe (m²)</div>
+            </div>
+            <div class="compteur-item">
+                <div class="compteur-value">${compteurs.papier_feuilles || 0}</div>
+                <div class="compteur-label">Papier (feuilles)</div>
             </div>
         `;
     } catch (error) {
@@ -433,19 +437,20 @@ async function refreshWidgetActivites() {
     if (!el) return;
     
     try {
-        const activites = await apiCall('/api/activites?statut=en_cours&limit=5');
+        const data = await apiCall('/api/dashboard/data');
+        const activites = data.activites || [];
         
         if (activites.length === 0) {
-            el.innerHTML = '<p class="text-muted">Aucune activité en cours</p>';
+            el.innerHTML = '<p class="text-muted">Aucune consommation récente</p>';
             return;
         }
         
         el.innerHTML = activites.map(a => `
             <div class="activite-item">
-                <div class="activite-titre">${escapeHtml(a.titre)}</div>
+                <div class="activite-titre">${escapeHtml(a.type_activite_nom || a.nom_type_activite || 'Activité')}</div>
                 <div class="activite-meta">
-                    <span class="badge ${getBadgeClassUrgence(a.niveau_urgence)}">${a.niveau_urgence}</span>
-                    <span>${a.assignee || 'Non assignée'}</span>
+                    <span class="badge bg-secondary">${escapeHtml(a.machine_nom || a.nom_machine || 'Machine n/a')}</span>
+                    <span>${escapeHtml(a.preparateur_nom || a.nom_preparateur || 'Préparateur n/a')}</span>
                 </div>
             </div>
         `).join('');
@@ -493,8 +498,32 @@ async function refreshWidgetCalendrier() {
 async function refreshWidgetFabtrackStats() {
     const el = document.getElementById('widget-fabtrack-stats-data');
     if (!el) return;
-    
-    el.innerHTML = '<p class="text-muted">Fabtrack non encore intégré (Phase 2)</p>';
+
+    try {
+        const data = await apiCall('/api/dashboard/data');
+        const stats = data.fabtrack_stats || {};
+
+        el.innerHTML = `
+            <div class="compteur-item">
+                <div class="compteur-value">${stats.total_interventions || 0}</div>
+                <div class="compteur-label">Total interventions</div>
+            </div>
+            <div class="compteur-item">
+                <div class="compteur-value">${stats.total_papier_feuilles || 0}</div>
+                <div class="compteur-label">Feuilles papier</div>
+            </div>
+            <div class="compteur-item">
+                <div class="compteur-value">${stats.total_papier_couleur || 0}</div>
+                <div class="compteur-label">Papier couleur</div>
+            </div>
+            <div class="compteur-item">
+                <div class="compteur-value">${stats.total_papier_nb || 0}</div>
+                <div class="compteur-label">Papier N&B</div>
+            </div>
+        `;
+    } catch (error) {
+        el.innerHTML = '<p class="text-muted">Erreur Fabtrack</p>';
+    }
 }
 
 async function refreshWidgetImprimantes() {

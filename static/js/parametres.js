@@ -93,6 +93,8 @@ async function loadSources() {
                 'prusalink': 'printer-fill'
             };
             const icon = typeIcons[source.type] || 'database';
+            const lastSync = source.derniere_sync ? `Dernier test: ${escapeHtml(source.derniere_sync)}` : 'Jamais testé';
+            const errorInfo = source.derniere_erreur ? `<br><small class="text-danger">${escapeHtml(source.derniere_erreur)}</small>` : '';
             
             return `
                 <div class="list-group-item d-flex justify-content-between align-items-center">
@@ -101,11 +103,17 @@ async function loadSources() {
                         <strong>${escapeHtml(source.nom)}</strong>
                         <br>
                         <small class="text-muted">${escapeHtml(source.url)}</small>
+                        <br>
+                        <small class="text-muted">${lastSync}</small>
+                        ${errorInfo}
                     </div>
                     <div>
                         <span class="badge ${source.actif ? 'bg-success' : 'bg-secondary'}">
                             ${source.actif ? 'Actif' : 'Inactif'}
                         </span>
+                        <button class="btn btn-sm btn-outline-primary ms-2" onclick="testSource(${source.id})">
+                            <i class="bi bi-plug"></i>
+                        </button>
                         <button class="btn btn-sm btn-outline-danger ms-2" onclick="deleteSource(${source.id})">
                             <i class="bi bi-trash"></i>
                         </button>
@@ -173,5 +181,23 @@ async function deleteSource(id) {
         loadSources();
     } catch (error) {
         showToast(`Erreur : ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Teste la connectivité d'une source
+ */
+async function testSource(id) {
+    try {
+        const result = await apiCall(`/api/sources/${id}/test`, { method: 'POST' });
+        if (result.success) {
+            showToast('Connexion OK', 'success');
+        } else {
+            showToast(`Test échoué: ${result.error || 'Erreur inconnue'}`, 'warning');
+        }
+    } catch (error) {
+        showToast(`Erreur test: ${error.message}`, 'error');
+    } finally {
+        loadSources();
     }
 }
