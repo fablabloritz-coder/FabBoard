@@ -143,6 +143,18 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_slides_ordre ON slides(ordre);
     CREATE INDEX IF NOT EXISTS idx_slides_actif ON slides(actif);
     CREATE INDEX IF NOT EXISTS idx_slide_widgets_slide ON slide_widgets(slide_id);
+
+    -- Table des missions (kanban)
+    CREATE TABLE IF NOT EXISTS missions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        titre TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        statut TEXT NOT NULL DEFAULT 'a_faire',  -- 'a_faire', 'en_cours', 'termine'
+        priorite INTEGER DEFAULT 0,              -- 0=normal, 1=haute, 2=urgente
+        ordre INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now','localtime')),
+        updated_at TEXT DEFAULT (datetime('now','localtime'))
+    );
     ''')
 
     # Insérer les paramètres par défaut si la table est vide
@@ -240,6 +252,9 @@ def init_db():
             ('meteo', 'Météo', 'Météo locale', '🌤️', 'general'),
             ('texte_libre', 'Texte libre', 'Zone de texte personnalisée', '📝', 'general'),
             ('image', 'Image', 'Affiche une image (JPG, PNG)', '🖼️', 'general'),
+            ('video', 'Vidéo', 'Affiche une vidéo locale ou YouTube/Dailymotion', '🎬', 'general'),
+            ('timer', 'Timer', 'Compte à rebours vers une date/heure cible', '⏱️', 'general'),
+            ('missions', 'Missions', 'Tableau kanban : à faire / en cours / terminé', '✅', 'general'),
         ]
         
         c.executemany(
@@ -300,6 +315,44 @@ def migrate_db():
         c.execute("ALTER TABLE slides ADD COLUMN fond_type TEXT DEFAULT 'defaut'")
         c.execute("ALTER TABLE slides ADD COLUMN fond_valeur TEXT DEFAULT ''")
         print('[FabBoard] Migration : colonnes fond_type/fond_valeur ajoutées à slides')
+
+    # Migration : ajouter le widget 'video' s'il n'existe pas
+    if c.execute("SELECT COUNT(*) FROM widgets_disponibles WHERE code = 'video'").fetchone()[0] == 0:
+        c.execute(
+            "INSERT INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?, ?, ?, ?, ?)",
+            ('video', 'Vidéo', 'Affiche une vidéo locale ou YouTube/Dailymotion', '🎬', 'general')
+        )
+        print('[FabBoard] Migration : widget video ajouté')
+
+    # Migration : ajouter le widget 'timer' s'il n'existe pas
+    if c.execute("SELECT COUNT(*) FROM widgets_disponibles WHERE code = 'timer'").fetchone()[0] == 0:
+        c.execute(
+            "INSERT INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?, ?, ?, ?, ?)",
+            ('timer', 'Timer', 'Compte à rebours vers une date/heure cible', '⏱️', 'general')
+        )
+        print('[FabBoard] Migration : widget timer ajouté')
+
+    # Migration : ajouter le widget 'missions' s'il n'existe pas
+    if c.execute("SELECT COUNT(*) FROM widgets_disponibles WHERE code = 'missions'").fetchone()[0] == 0:
+        c.execute(
+            "INSERT INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?, ?, ?, ?, ?)",
+            ('missions', 'Missions', 'Tableau kanban : à faire / en cours / terminé', '✅', 'general')
+        )
+        print('[FabBoard] Migration : widget missions ajouté')
+
+    # Migration : créer la table missions
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS missions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            titre TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            statut TEXT NOT NULL DEFAULT 'a_faire',  -- 'a_faire', 'en_cours', 'termine'
+            priorite INTEGER DEFAULT 0,              -- 0=normal, 1=haute, 2=urgente
+            ordre INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now','localtime')),
+            updated_at TEXT DEFAULT (datetime('now','localtime'))
+        )
+    ''')
 
     conn.commit()
     conn.close()

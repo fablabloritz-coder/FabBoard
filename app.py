@@ -28,6 +28,7 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 UPLOAD_DIR = os.path.join(BASE_DIR, 'static', 'uploads')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
+ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogg'}
 PORT = int(os.environ.get('FABBOARD_PORT', 5580))
 
 # Cache mémoire pour météo Open-Meteo (pas besoin de clé API)
@@ -397,6 +398,11 @@ def test_api():
 def parametres():
     """Page de configuration."""
     return render_template('parametres.html', page='parametres')
+
+@app.route('/medias')
+def medias():
+    """Page de gestion des médias (images et vidéos)."""
+    return render_template('medias.html', page='medias')
 
 
 # ============================================================
@@ -1274,6 +1280,11 @@ def api_get_widget_data(source_id):
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+
+def allowed_video_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_VIDEO_EXTENSIONS
+
+
 @app.route('/api/upload', methods=['POST'])
 def api_upload():
     """Upload une image pour les widgets ou les fonds de slide."""
@@ -1295,6 +1306,162 @@ def api_upload():
 
     url = f"/static/uploads/{unique_name}"
     return jsonify({'success': True, 'url': url, 'filename': unique_name})
+
+
+@app.route('/api/upload-video', methods=['POST'])
+def api_upload_video():
+    """Upload une vidéo pour le widget vidéo."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'Aucun fichier envoyé'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'Nom de fichier vide'}), 400
+
+    if not allowed_video_file(file.filename):
+        return jsonify({'error': 'Type de fichier non autorisé. Extensions acceptées : ' + ', '.join(ALLOWED_VIDEO_EXTENSIONS)}), 400
+
+    ext = secure_filename(file.filename).rsplit('.', 1)[1].lower()
+    unique_name = f"{secrets.token_hex(8)}.{ext}"
+    filepath = os.path.join(UPLOAD_DIR, unique_name)
+    file.save(filepath)
+
+    url = f"/static/uploads/{unique_name}"
+    return jsonify({'success': True, 'url': url, 'filename': unique_name})
+
+
+# ============================================================
+# API — GESTION DES MÉDIAS
+# ============================================================
+
+@app.route('/api/medias')
+def api_list_medias():
+    """Liste tous les fichiers uploadés (images et vidéos)."""
+    medias = []
+    if os.path.isdir(UPLOAD_DIR):
+        for fname in sorted(os.listdir(UPLOAD_DIR)):
+            fpath = os.path.join(UPLOAD_DIR, fname)
+            if not os.path.isfile(fpath):
+                continue
+            ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
+            if ext in ALLOWED_EXTENSIONS:
+                media_type = 'image'
+            elif ext in ALLOWED_VIDEO_EXTENSIONS:
+                media_type = 'video'
+            else:
+                continue
+            size = os.path.getsize(fpath)
+            medias.append({
+                'filename': fname,
+                'url': f'/static/uploads/{fname}',
+                'type': media_type,
+                'size': size,
+            })
+    return jsonify({'success': True, 'data': medias})
+
+
+@app.route('/api/medias/<filename>', methods=['DELETE'])
+def api_delete_media(filename):
+    """Supprime un fichier uploadé."""
+    safe_name = secure_filename(filename)
+    fpath = os.path.join(UPLOAD_DIR, safe_name)
+    if not os.path.isfile(fpath):
+        return jsonify({'error': 'Fichier non trouvé'}), 404
+    os.remove(fpath)
+    return jsonify({'success': True})
+
+
+# ============================================================
+# API — MISSIONS (Kanban)
+# ============================================================
+
+@app.route('/api/missions')
+def api_get_missions():
+    """Liste toutes les missions."""
+    db = get_db()
+    try:
+        rows = db.execute('SELECT * FROM missions ORDER BY statut, ordre, id').fetchall()
+        return jsonify({'success': True, 'data': [dict(r) for r in rows]})
+    finally:
+        db.close()
+
+
+@app.route('/api/missions', methods=['POST'])
+def api_create_mission():
+    """Crée une nouvelle mission."""
+    data = request.get_json()
+    if not data or not data.get('titre', '').strip():
+        return jsonify({'error': "Le titre est requis"}), 400
+
+    db = get_db()
+    try:
+        c = db.execute(
+            '''INSERT INTO missions (titre, description, statut, priorite, ordre)
+               VALUES (?, ?, ?, ?, ?)''',
+            (
+                data['titre'].strip(),
+                data.get('description', '').strip(),
+                data.get('statut', 'a_faire'),
+                int(data.get('priorite', 0)),
+                int(data.get('ordre', 0)),
+            )
+        )
+        db.commit()
+        mission = db.execute('SELECT * FROM missions WHERE id = ?', (c.lastrowid,)).fetchone()
+        return jsonify({'success': True, 'data': dict(mission)}), 201
+    finally:
+        db.close()
+
+
+@app.route('/api/missions/<int:mission_id>', methods=['PUT'])
+def api_update_mission(mission_id):
+    """Met à jour une mission."""
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Payload JSON requis'}), 400
+
+    db = get_db()
+    try:
+        existing = db.execute('SELECT * FROM missions WHERE id = ?', (mission_id,)).fetchone()
+        if not existing:
+            return jsonify({'error': 'Mission non trouvée'}), 404
+
+        titre = data.get('titre', existing['titre']).strip()
+        description = data.get('description', existing['description']).strip()
+        statut = data.get('statut', existing['statut'])
+        priorite = int(data.get('priorite', existing['priorite']))
+        ordre = int(data.get('ordre', existing['ordre']))
+
+        if statut not in ('a_faire', 'en_cours', 'termine'):
+            return jsonify({'error': "Statut invalide"}), 400
+
+        db.execute(
+            '''UPDATE missions
+               SET titre = ?, description = ?, statut = ?, priorite = ?, ordre = ?,
+                   updated_at = datetime('now','localtime')
+               WHERE id = ?''',
+            (titre, description, statut, priorite, ordre, mission_id)
+        )
+        db.commit()
+        mission = db.execute('SELECT * FROM missions WHERE id = ?', (mission_id,)).fetchone()
+        return jsonify({'success': True, 'data': dict(mission)})
+    finally:
+        db.close()
+
+
+@app.route('/api/missions/<int:mission_id>', methods=['DELETE'])
+def api_delete_mission(mission_id):
+    """Supprime une mission."""
+    db = get_db()
+    try:
+        existing = db.execute('SELECT id FROM missions WHERE id = ?', (mission_id,)).fetchone()
+        if not existing:
+            return jsonify({'error': 'Mission non trouvée'}), 404
+        db.execute('DELETE FROM missions WHERE id = ?', (mission_id,))
+        db.commit()
+        return jsonify({'success': True})
+    finally:
+        db.close()
 
 
 # ============================================================

@@ -53,6 +53,35 @@ function uploadImageField(fileInput, configKey) {
 }
 
 /**
+ * Upload une vidéo via /api/upload-video et met à jour le champ caché correspondant.
+ */
+function uploadVideoField(fileInput, configKey) {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showToast('Upload en cours...', 'info');
+
+    fetch('/api/upload-video', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                const hidden = fileInput.closest('.mb-3').querySelector('[data-config-key="' + configKey + '"]');
+                if (hidden) hidden.value = result.url;
+                // Mettre à jour l'indication textuelle
+                const textInput = fileInput.closest('.mb-3').querySelector('input[type="text"]');
+                if (textInput) textInput.value = result.url;
+                showToast('Vidéo uploadée', 'success');
+            } else {
+                showToast(result.error || 'Erreur upload', 'error');
+            }
+        })
+        .catch(() => showToast('Erreur lors de l\'upload vidéo', 'error'));
+}
+
+/**
  * Affiche/masque les options de fond selon le type sélectionné.
  */
 function toggleFondOptions() {
@@ -1002,6 +1031,39 @@ const WIDGET_CONFIG_DEFINITIONS = {
                 { value: 'fill', label: 'Étirer' }
             ], default: 'contain' }
         ]
+    },
+    video: {
+        titre: 'Vidéo',
+        fields: [
+            { key: 'video_type', label: 'Type de source', type: 'select', options: [
+                { value: 'local', label: 'Vidéo locale (uploadée)' },
+                { value: 'youtube', label: 'YouTube (ID de la vidéo)' },
+                { value: 'dailymotion', label: 'Dailymotion (ID de la vidéo)' },
+                { value: 'url', label: 'URL directe (mp4, webm)' }
+            ], default: 'local' },
+            { key: 'video_src', label: 'Source vidéo', type: 'video_upload', default: '',
+              placeholder: 'Upload une vidéo ou saisissez l\'ID YouTube / Dailymotion' },
+            { key: 'autoplay', label: 'Lecture automatique', type: 'checkbox', default: true },
+            { key: 'boucle', label: 'Boucle', type: 'checkbox', default: true },
+            { key: 'muet', label: 'Muet (obligatoire pour autoplay)', type: 'checkbox', default: true }
+        ]
+    },
+    timer: {
+        titre: 'Timer',
+        fields: [
+            { key: 'titre', label: 'Titre', type: 'text', default: 'Compte à rebours', placeholder: 'Ex: Portes ouvertes' },
+            { key: 'date_cible', label: 'Date cible', type: 'date', default: '' },
+            { key: 'heure_cible', label: 'Heure cible', type: 'time', default: '00:00' },
+            { key: 'afficher_secondes', label: 'Afficher les secondes', type: 'checkbox', default: true },
+            ECHELLE_FIELD
+        ]
+    },
+    missions: {
+        titre: 'Missions',
+        fields: [
+            { key: 'nombre_max', label: 'Nombre max par colonne', type: 'number', default: 10, min: 1, max: 50 },
+            ECHELLE_FIELD
+        ]
     }
 };
 
@@ -1144,6 +1206,32 @@ function buildFieldHtml(field, value, sourcesCache) {
                 '<input type="hidden" data-config-key="' + field.key + '" value="' + escapeHtml(String(value || '')) + '">' +
                 '<input type="file" class="form-control" accept="image/*" onchange="uploadImageField(this, \'' + field.key + '\')">' +
                 '<small class="form-text text-muted">JPG, PNG, GIF, WebP, SVG acceptés.</small>' +
+                '</div>';
+
+        case 'video_upload':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<input type="hidden" data-config-key="' + field.key + '" value="' + escapeHtml(String(value || '')) + '">' +
+                (value ? '<div class="mb-2"><small class="text-success"><i class="bi bi-check-circle"></i> ' + escapeHtml(value) + '</small></div>' : '') +
+                '<input type="file" class="form-control mb-2" accept="video/mp4,video/webm,video/ogg" onchange="uploadVideoField(this, \'' + field.key + '\')">' +
+                '<input type="text" class="form-control" placeholder="Ou saisissez l\'ID YouTube/Dailymotion ou une URL" ' +
+                'value="' + escapeHtml(String(value || '')) + '" ' +
+                'onchange="this.closest(\'.mb-3\').querySelector(\'[data-config-key=\\x22' + field.key + '\\x22]\').value = this.value">' +
+                '<small class="form-text text-muted">Upload MP4/WebM ou saisissez un ID (ex: dQw4w9WgXcQ pour YouTube).</small>' +
+                '</div>';
+
+        case 'date':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<input type="date" class="form-control" data-config-key="' + field.key + '" ' +
+                'value="' + escapeHtml(String(value || '')) + '">' +
+                '</div>';
+
+        case 'time':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<input type="time" class="form-control" data-config-key="' + field.key + '" ' +
+                'value="' + escapeHtml(String(value || '')) + '">' +
                 '</div>';
 
         default:

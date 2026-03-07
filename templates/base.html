@@ -53,6 +53,11 @@
                             <i class="bi bi-gear"></i> Paramètres
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if page == 'medias' %}active{% endif %}" href="{{ url_for('medias') }}">
+                            <i class="bi bi-film"></i> Médias
+                        </a>
+                    </li>
                 </ul>
                 <button class="btn btn-outline-light btn-sm me-3" id="btnToggleTheme" title="Changer le thème">
                     <i class="bi bi-moon-stars" id="themeIcon"></i>
