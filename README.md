@@ -1,92 +1,400 @@
 # FabBoard
 
-> ⚠️ **Projet en développement actif** — Phase 1.5 en cours
+**Dashboard TV temps réel pour Fablab** — Affiche statistiques, calendrier, météo et état des machines sur un écran dédié via un système de slides configurables.
 
-**Application Web d'affichage de données sous forme de slides paramétrables**
-
----
-
-## 📋 Description
-
-FabBoard est un tableau de bord TV pour Fablab permettant d'afficher des informations en temps réel via un système de slides configurables.
-
-### Phase actuelle : 1.5 - Système de slides
-- ✅ Éditeur de slides avec drag & drop
-- ✅ Layouts configurables (grilles Windows 11-like)
-- ✅ Widgets paramétrables
-- ✅ Mode clair/sombre
-- ✅ Interface de configuration
-
-### Phases à venir
-- **Phase 2** : Intégration Fabtrack (lecture seule)
-- **Phase 3** : Intégration CalDAV (événements)
-- **Phase 4** : Intégration Repetier Server (imprimantes 3D)
+![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-3.1-green?logo=flask&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-local-lightgrey?logo=sqlite&logoColor=white)
+![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-purple?logo=bootstrap&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-blue?logo=docker&logoColor=white)
 
 ---
 
-## 🚀 Démarrage rapide
+## 📋 Présentation
 
-### Prérequis
-- Python 3.9+
-- pip
+FabBoard transforme n'importe quel écran TV en tableau de bord interactif pour votre Fablab. Il agrège les données de **Fabtrack** (consommations machines), de votre **calendrier Nextcloud/CalDAV**, de la **météo** (Open-Meteo), et affiche le tout dans un diaporama plein écran entièrement configurable.
 
-### Installation
+### Fait partie de la Fablab Suite
+
+| Application | Description | Port |
+|---|---|---|
+| **[PretGo](https://github.com/fablabloritz-coder/PretGo)** | Gestion de prêts de matériel | 5000 |
+| **[Fabtrack](https://github.com/fablabloritz-coder/Fabtrack)** | Suivi des consommations machines | 5555 |
+| **FabBoard** | Dashboard TV temps réel | 5580 |
+
+Les 3 applications sont **indépendantes** — chacune peut tourner seule avec son propre Docker. FabBoard se connecte en lecture seule à l'API de Fabtrack et aux sources CalDAV configurées.
+
+---
+
+## ✨ Fonctionnalités
+
+### Système de slides
+- Éditeur visuel de slides avec layouts configurables (grilles 1×1 à 3×2)
+- Widgets assignables par glisser-déposer
+- Durée d'affichage individuelle par slide (5s à 5min)
+- Fond personnalisable par slide (couleur ou image)
+- Diaporama plein écran optimisé TV (1920×1080)
+
+### Widgets disponibles
+
+| Widget | Description |
+|---|---|
+| **Horloge** | Heure, date, semaine |
+| **Compteurs Fabtrack** | Total interventions, filament 3D (kg), surface découpe (m²), feuilles imprimées — couleurs distinctes par métrique |
+| **Statistiques Fabtrack** | Répartition par type d'activité avec barres colorées |
+| **Activités récentes** | Dernières consommations Fabtrack avec couleur par type d'activité |
+| **Calendrier** | Événements CalDAV/Nextcloud avec code couleur d'urgence (imminent, proche, cette semaine) |
+| **Météo** | Température, icône, description, humidité, vent (Open-Meteo, sans clé API) |
+| **Image** | Affichage d'image uploadée (contain/cover/fill) |
+| **Texte libre** | Texte HTML personnalisé |
+
+### Personnalisation TV
+- **Échelle par widget** (×1 à ×3) — adapte la taille de tous les textes
+- **Police personnalisable** parmi 8 Google Fonts (Inter, Roboto, Poppins, Montserrat, Open Sans, Source Sans, Orbitron, Rajdhani)
+- **Mode sombre** natif optimisé pour écran TV
+- Les emplacements non assignés sont automatiquement transparents
+
+### Sources de données
+- **Fabtrack** : connexion automatique via API REST, synchronisation configurable
+- **CalDAV / Nextcloud** : événements de calendrier avec authentification
+- **Open-Meteo** : météo gratuite par ville (pas de clé API requise)
+- **Repetier Server / PrusaLink** : état des imprimantes 3D (prévu)
+- Auto-refresh configurable (10s à 5min) + bouton de re-synchronisation forcée
+- Statut de connexion visible avec badge OK/Erreur/Jamais testé
+
+---
+
+## 🚀 Installation
+
+### Option A — Local Windows (développement / poste unique)
+
+#### Prérequis
+- **Python 3.10+** installé et dans le PATH
+- **pip** (inclus avec Python)
+
+#### Installation rapide
 
 ```bash
-# Cloner le projet
+# Méthode 1 : Script batch (Windows)
+# Double-cliquez sur start.bat
+
+# Méthode 2 : Manuelle
 git clone https://github.com/fablabloritz-coder/FabBoard.git
 cd FabBoard
+python -m venv .venv
 
-# Installer les dépendances
+# Windows :
+.venv\Scripts\activate
+# Linux / macOS :
+source .venv/bin/activate
+
 pip install -r requirements.txt
-
-# Lancer l'application
 python start.py
 ```
 
-L'application sera accessible sur **http://localhost:5580**
+L'application est accessible sur **http://localhost:5580**.
+
+`start.bat` (Windows) : libère le port 5580 si occupé, installe l'environnement virtuel si nécessaire, lance le serveur Waitress et ouvre le navigateur.
 
 ---
 
-## 📦 Structure du projet
+### Option B — Docker (recommandé pour serveur / production)
+
+#### Déploiement individuel (FabBoard seul)
+
+```bash
+cd FabBoard
+docker compose up -d --build
+```
+
+- Application : `http://localhost:5580`
+- Données persistées : `./docker-data/data` (SQLite)
+
+#### Déploiement complet (les 3 applications ensemble)
+
+Pour déployer PretGo + Fabtrack + FabBoard sur un même serveur (ex : Ubuntu), un `docker-compose.yml` unifié orchestre les 3 conteneurs sur un réseau partagé :
+
+```bash
+# Cloner les 3 dépôts dans un même dossier
+mkdir ~/fablab && cd ~/fablab
+git clone https://github.com/fablabloritz-coder/PretGo.git
+git clone https://github.com/fablabloritz-coder/Fabtrack.git
+git clone https://github.com/fablabloritz-coder/FabBoard.git
+```
+
+Créer le fichier `docker-compose.yml` à la racine `~/fablab/` :
+
+```yaml
+services:
+  pretgo:
+    build: { context: ./PretGo, dockerfile: Dockerfile }
+    container_name: pretgo
+    restart: unless-stopped
+    ports: ["5000:5000"]
+    environment:
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY_PRETGO:-change-me-pretgo}
+      TZ: Europe/Paris
+    volumes:
+      - pretgo-data:/app/data
+      - pretgo-uploads:/app/static/uploads/materiel
+    networks: [fablab-net]
+
+  fabtrack:
+    build: { context: ./Fabtrack, dockerfile: Dockerfile }
+    container_name: fabtrack
+    restart: unless-stopped
+    ports: ["5555:5555"]
+    environment:
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY_FABTRACK:-change-me-fabtrack}
+      TZ: Europe/Paris
+    volumes:
+      - fabtrack-data:/app/data
+      - fabtrack-uploads:/app/static/uploads
+    networks: [fablab-net]
+
+  fabboard:
+    build: { context: ./FabBoard, dockerfile: Dockerfile }
+    container_name: fabboard
+    restart: unless-stopped
+    ports: ["5580:5580"]
+    environment:
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY_FABBOARD:-change-me-fabboard}
+      TZ: Europe/Paris
+      FABTRACK_URL: http://fabtrack:5555  # Réseau Docker interne
+    volumes:
+      - fabboard-data:/app/data
+    depends_on: [fabtrack]
+    networks: [fablab-net]
+
+volumes:
+  pretgo-data:
+  pretgo-uploads:
+  fabtrack-data:
+  fabtrack-uploads:
+  fabboard-data:
+
+networks:
+  fablab-net:
+    driver: bridge
+```
+
+Lancer :
+
+```bash
+cd ~/fablab
+docker compose up -d --build
+```
+
+> **Note Linux** : si vous avez une erreur de permissions Docker, ajoutez votre utilisateur au groupe : `sudo usermod -aG docker $USER && newgrp docker`
+
+#### Accès aux applications
+
+| Application | URL |
+|---|---|
+| PretGo | `http://IP_SERVEUR:5000` |
+| Fabtrack | `http://IP_SERVEUR:5555` |
+| FabBoard | `http://IP_SERVEUR:5580` |
+
+Pour trouver l'IP du serveur : `hostname -I | awk '{print $1}'`
+
+#### Interconnexion FabBoard ↔ Fabtrack
+
+- En déploiement **unifié** (docker-compose ci-dessus) : FabBoard utilise `http://fabtrack:5555` automatiquement (réseau Docker interne).
+- En déploiement **individuel** : dans FabBoard → Paramètres → Sources, ajoutez une source Fabtrack avec `http://IP_SERVEUR:5555`.
+
+#### Variables d'environnement
+
+| Variable | Description | Défaut |
+|---|---|---|
+| `FLASK_SECRET_KEY` | Clé secrète Flask (recommandé en production) | Générée automatiquement |
+| `TZ` | Fuseau horaire | `Europe/Paris` |
+| `FABTRACK_URL` | URL de Fabtrack pour le bootstrap automatique | `http://host.docker.internal:5555` |
+
+#### Mise à jour
+
+```bash
+cd ~/fablab
+git -C PretGo pull
+git -C Fabtrack pull
+git -C FabBoard pull
+docker compose up -d --build
+```
+
+#### Sauvegarde
+
+Les données sont dans des volumes Docker nommés. Pour sauvegarder :
+
+```bash
+# Localiser les volumes
+docker volume inspect fablab_fabboard-data
+
+# Ou utiliser les fonctions de sauvegarde intégrées de chaque application
+```
+
+Chaque application propose aussi un export/import de sa base de données via son interface web.
+
+---
+
+## 📁 Structure du projet
 
 ```
-fabboard/
-├── app.py              # Application Flask principale
-├── models.py           # Modèles et base de données
-├── start.py           # Script de démarrage
-├── templates/         # Templates Jinja2
-├── static/            # CSS, JS, images
-└── data/              # Base de données SQLite
+FabBoard/
+├── app.py                  # Application Flask + API REST
+├── models.py               # Schéma SQLite, migrations, seed
+├── sync_worker.py          # Worker de synchronisation des sources externes
+├── start.py                # Script de démarrage (dev)
+├── start.bat               # Lancement Windows (kill port + venv + serveur)
+├── Dockerfile              # Image Docker (Python 3.11-slim + Waitress)
+├── docker-compose.yml      # Docker Compose individuel
+├── requirements.txt        # Dépendances Python
+├── data/                   # Base SQLite (générée automatiquement)
+├── static/
+│   ├── css/
+│   │   ├── style.css       # Styles configuration/paramètres
+│   │   ├── dashboard.css   # Styles TV (widgets, échelle, polices, urgence)
+│   │   └── slides.css      # Styles éditeur de slides
+│   ├── js/
+│   │   ├── dashboard.js    # FabBoardStore + cycle slides + rendu widgets
+│   │   ├── parametres.js   # Gestion sources + paramètres
+│   │   ├── slides.js       # Éditeur de slides CRUD
+│   │   └── utils.js        # Utilitaires partagés
+│   ├── img/                # Images statiques
+│   └── manifest.json       # PWA manifest
+└── templates/
+    ├── base.html            # Layout principal
+    ├── dashboard.html       # Page TV plein écran
+    ├── parametres.html      # Configuration sources + réglages
+    ├── slides.html          # Éditeur de slides
+    ├── test_api.html        # Page de debug API
+    └── widgets/             # Templates individuels des widgets
+        ├── horloge.html
+        ├── compteurs.html
+        ├── fabtrack_stats.html
+        ├── activites.html
+        ├── calendrier.html
+        ├── meteo.html
+        └── image.html
 ```
 
 ---
 
-## 🎨 Fonctionnalités actuelles
+## 🏗️ Architecture technique
 
-### Éditeur de slides
-- Créer/modifier des slides personnalisées
-- Choisir un layout (1×1, 2×1, 2×2, 3×2, etc.)
-- Ajouter des widgets par drag & drop
-- Définir le temps d'affichage de chaque slide
+### Stack
 
-### Widgets disponibles
-- 📊 Compteurs Fabtrack (à venir Phase 2)
-- 📋 Activités Fabtrack (à venir Phase 2)
-- 🕐 Horloge
-- 📅 Calendrier CalDAV (à venir Phase 3)
-- 🖨️ Imprimantes 3D (à venir Phase 4)
-- 📝 Texte libre
-- 🌤️ Météo
+| Composant | Technologie |
+|---|---|
+| Backend | Flask 3.1 (Python) + Waitress (WSGI production) |
+| Base de données | SQLite 3 (WAL mode) |
+| Frontend | Bootstrap 5.3 + Bootstrap Icons + Vanilla JS ES6 |
+| Synchronisation | Thread daemon (sync_worker) polling toutes les 10s |
+| Météo | Open-Meteo API (gratuit, sans clé) |
+| Calendrier | CalDAV (requête HTTP + parsing iCal RFC 5545) |
+| Conteneurisation | Docker + Docker Compose |
+
+### Flux de données
+
+```
+Sources externes                  FabBoard
+┌─────────────┐     sync_worker    ┌──────────────────┐
+│  Fabtrack   │────────────────────│  sources_cache    │
+│  API REST   │   (poll 10s)       │  (SQLite)         │
+├─────────────┤                    ├──────────────────┤
+│  CalDAV     │────────────────────│                    │
+│  Nextcloud  │                    │  /api/dashboard/  │──→ FabBoardStore (JS)
+├─────────────┤                    │      data         │        │
+│  Open-Meteo │────────────────────│                    │        ▼
+│  API        │   (direct fetch)   │  /api/meteo       │    fabboard:refresh
+└─────────────┘                    └──────────────────┘    (CustomEvent)
+                                                               │
+                                                               ▼
+                                                        Widgets HTML
+                                                        (re-render)
+```
+
+### Sync Worker
+
+Le `sync_worker.py` tourne en tâche de fond (daemon thread) et :
+1. Toutes les 10s, vérifie chaque source active
+2. Si `derniere_sync + sync_interval_sec < maintenant` → fetch les données
+3. Cache le résultat dans `sources_cache` (SQLite)
+4. L'API sert les données depuis le cache (avec fallback direct si cache vide)
 
 ---
 
-## 🛠️ Technologies
+## 🔌 API REST
 
-- **Backend** : Flask 3.1, SQLite
-- **Frontend** : Bootstrap 5.3, JavaScript ES6
-- **Drag & Drop** : SortableJS
-- **API** : REST JSON
+### Dashboard
+
+| Méthode | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/dashboard/data` | Données agrégées (stats, activités, calendrier, machines) |
+| `GET` | `/api/widget-data/<source_id>` | Données d'une source spécifique |
+| `GET` | `/api/meteo?ville=Nancy,FR` | Météo par ville |
+
+### Slides & Widgets
+
+| Méthode | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/slides` | Liste des slides avec widgets |
+| `POST` | `/api/slides` | Créer une slide |
+| `PUT` | `/api/slides/<id>` | Modifier une slide |
+| `DELETE` | `/api/slides/<id>` | Supprimer une slide |
+| `POST` | `/api/slides/reorder` | Réordonner les slides |
+
+### Sources de données
+
+| Méthode | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/sources` | Liste des sources configurées |
+| `POST` | `/api/sources` | Ajouter une source |
+| `PUT` | `/api/sources/<id>` | Modifier une source |
+| `DELETE` | `/api/sources/<id>` | Supprimer une source |
+| `POST` | `/api/sources/<id>/test` | Tester la connexion |
+| `POST` | `/api/sources/<id>/resync` | Forcer une re-synchronisation |
+
+### Paramètres
+
+| Méthode | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/parametres` | Lire les paramètres |
+| `PUT` | `/api/parametres` | Modifier les paramètres |
+
+---
+
+## ⚙️ Configuration
+
+### Paramètres de l'interface (Paramètres → Général)
+
+| Paramètre | Description | Défaut |
+|---|---|---|
+| Intervalle de rafraîchissement | Fréquence de mise à jour des données | 30s |
+| Nom du Fablab | Affiché dans l'interface | Fablab |
+| Police du dashboard | Police Google Fonts pour l'affichage TV | System |
+| Mode sombre | Thème clair ou sombre | Sombre |
+
+### Configuration des sources (Paramètres → Sources)
+
+Ajoutez vos sources via l'interface :
+
+1. **Fabtrack** : URL de l'API (ex : `http://fabtrack:5555`)
+2. **CalDAV** : URL du calendrier + identifiants (user/pass)
+3. **Open-Meteo** : configuré directement dans le widget (ville)
+
+Chaque source affiche son statut (OK / Erreur / Jamais testé) avec auto-refresh toutes les 30s.
+
+---
+
+## 🔒 Sécurité
+
+| Mesure | Détail |
+|---|---|
+| **XSS** | Échappement systématique via `textContent` côté JS + `escapeHtml()` |
+| **SQL Injection** | Requêtes paramétrées exclusivement |
+| **Réseau** | Conçu pour réseau privé Fablab (pas d'authentification) |
+| **CORS** | Pas activé (même origine) |
+| **Validation** | Inputs utilisateur validés côté serveur |
+| **Secret key** | Configurable via `FLASK_SECRET_KEY`, générée automatiquement sinon |
 
 ---
 
@@ -94,209 +402,7 @@ fabboard/
 
 Ce projet est développé pour le Fablab Loritz.
 
----
-
-## 👥 Contributeurs
-
-- Fablab Loritz Team
-
----
-
-**Note** : Ce projet est en développement actif. Les fonctionnalités et l'API peuvent changer.
-# Éditer .env avec vos URLs et clés API
-
-# Démarrer avec Docker Compose
-docker-compose up -d
-```
-
-FabBoard sera accessible sur `http://localhost:5580`
-
-### Installation manuelle (développement)
-
-```bash
-# Créer un environnement virtuel
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-.venv\Scripts\activate      # Windows
-
-# Installer les dépendances
-pip install -r requirements.txt
-
-# Lancer l'application
-python app.py
-```
-
----
-
-## 📊 Fonctionnalités
-
-### Module Activités
-- ✅ Création/modification/suppression d'activités
-- ✅ Calcul automatique du niveau d'urgence (basé sur date d'expiration)
-- ✅ Statuts : En attente → En cours → Terminé
-- ✅ Filtrage par statut, urgence, date
-- ✅ Compteurs journaliers et totaux
-
-### Module Calendrier (Nextcloud)
-- 📅 Synchronisation CalDAV automatique
-- 📅 Affichage des N prochains événements
-- 📅 Support récurrence
-
-### Module Imprimantes 3D
-- 🖨️ Repetier Server : état, progression, températures
-- 🖨️ PrusaLink (à venir) : monitoring Prusa i3/XL
-- 🖨️ Cartes visuelles par imprimante
-
-### Module Fabtrack
-- 📈 Statistiques du jour (interventions, poids 3D, surface découpe)
-- 🔧 État des machines (disponible/réparation/HS)
-- 📜 Dernières consommations
-
-### Dashboard TV
-- 🖥️ Affichage plein écran optimisé 1920×1080
-- 🔄 Auto-refresh configurable (30-60s)
-- 🌙 Mode sombre natif
-- 📱 PWA mobile pour saisie rapide
-
----
-
-## 🔌 API REST
-
-### Activités
-
-```
-GET    /api/activites              Liste des activités (filtres: statut, urgence)
-POST   /api/activites              Créer une activité
-PUT    /api/activites/<id>         Modifier une activité
-DELETE /api/activites/<id>         Supprimer une activité
-PATCH  /api/activites/<id>/statut  Changer le statut rapidement
-GET    /api/activites/compteurs    Compteurs (en_attente, en_cours, terminé)
-```
-
-### Dashboard
-
-```
-GET    /api/dashboard/data         Toutes les données agrégées pour le dashboard
-GET    /api/sources                Liste des sources de données configurées
-PUT    /api/sources/<id>           Modifier une source de données
-```
-
----
-
-## 🗄️ Modèle de données
-
-```sql
-activites            -- Activités manuelles (cœur du système)
-├── id, titre, description, lieu
-├── date_debut, date_fin, date_expiration, horaire
-├── nature (Tâche, Maintenance, Formation, Événement, Commande)
-├── niveau_urgence (auto, critique, urgent, normal, faible)
-├── statut (en_attente, en_cours, termine, annule)
-└── assignee, created_at, updated_at
-
-sources              -- Configuration sources externes
-├── id, nom, type (fabtrack, repetier, nextcloud_caldav, prusalink)
-├── url, credentials_json, sync_interval_sec
-└── actif, derniere_sync, derniere_erreur
-
-evenements_calendrier -- Cache des événements Nextcloud
-├── id, source_id, uid, titre, description, lieu
-├── date_debut, date_fin, recurrence
-└── dernier_refresh
-
-parametres           -- Paramètres d'affichage
-└── cle, valeur (refresh_interval, theme, fablab_name)
-```
-
----
-
-## 🛠️ Stack technique
-
-| Composant | Technologie |
-|-----------|------------|
-| Backend | Flask 3.1 (Python 3.12) |
-| Base de données | SQLite 3 (WAL mode) |
-| Frontend | Bootstrap 5.3 + Vanilla JS |
-| Graphiques | Chart.js 4.4.7 |
-| Sync périodique | APScheduler 3.10 |
-| Calendrier | CalDAV (librairie `caldav`) |
-| API externe | `requests` |
-| PWA | Service Worker + Manifest |
-| Conteneurisation | Docker + Docker Compose |
-
----
-
-## 🔧 Configuration
-
-### Variables d'environnement (.env)
-
-```env
-# FabBoard
-FABBOARD_PORT=5580
-FABBOARD_SECRET=your-secret-here
-
-# Fabtrack (API)
-FABTRACK_URL=http://fabtrack:5555
-
-# Repetier Server
-REPETIER_URL=http://192.168.x.x:3344
-REPETIER_APIKEY=
-
-# Nextcloud CalDAV
-NEXTCLOUD_CALDAV_URL=https://votre-nextcloud/remote.php/dav
-NEXTCLOUD_USER=fablab
-NEXTCLOUD_PASS=motdepasse
-NEXTCLOUD_CALENDAR_NAME=fablab
-
-# PrusaLink (optionnel)
-PRUSALINK_URLS=http://192.168.x.x1,http://192.168.x.x2
-PRUSALINK_APIKEYS=key1,key2
-```
-
----
-
-## 🐳 Docker Compose
-
-Le fichier `docker-compose.yml` à la racine orchestre FabBoard et Fabtrack :
-
-```yaml
-services:
-  fabtrack:
-    build: ./fabtrack
-    ports: ["5555:5555"]
-    volumes: [fabtrack_data:/app/data]
-    
-  fabboard:
-    build: ./fabboard
-    ports: ["5580:5580"]
-    volumes: [fabboard_data:/app/data]
-    depends_on: [fabtrack]
-    environment:
-      - FABTRACK_URL=http://fabtrack:5555
-```
-
----
-
-## 📱 PWA (Progressive Web App)
-
-FabBoard est installable sur Android :
-1. Ouvrir `http://server-ip:5580` sur votre téléphone
-2. Menu Chrome/Firefox → "Ajouter à l'écran d'accueil"
-3. L'icône FabBoard apparaît comme une vraie app
-
-Fonctionnalités hors-ligne : formulaire de saisie d'activités en attente de connexion.
-
----
-
-## 🔒 Sécurité
-
-- **Réseau privé** : Pas d'authentification (réseau Fablab privé)
-- **Validation** : Tous les inputs utilisateurs sont validés/échappés
-- **Injection SQL** : Requêtes paramétrées exclusivement
-- **Sauvegardes** : Export/import base SQLite avec validation
-- **CORS** : Activé uniquement pour les sources autorisées
-
----
+MIT — © 2025-2026
 
 ## 🎨 Interface TV
 

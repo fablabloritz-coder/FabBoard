@@ -462,16 +462,30 @@ def api_dashboard_data():
             'papier_feuilles': summary.get('total_papier_feuilles', 0),
         }
 
-        # ── Calendrier : depuis le cache CalDAV ──
+        # ── Calendrier : depuis le cache CalDAV (avec fallback direct) ──
         evenements = []
         caldav_source = db.execute(
-            'SELECT id FROM sources WHERE type = ? AND actif = 1 ORDER BY id LIMIT 1',
+            'SELECT id, url, credentials_json FROM sources WHERE type = ? AND actif = 1 ORDER BY id LIMIT 1',
             ('nextcloud_caldav',)
         ).fetchone()
         if caldav_source:
             cal_cached = get_cached_source_data(caldav_source['id'])
             if cal_cached and isinstance(cal_cached, dict):
                 evenements = cal_cached.get('events', [])
+            else:
+                # Fallback : appel direct si le cache n'est pas encore prêt
+                try:
+                    from sync_worker import SyncWorker
+                    creds = json.loads(caldav_source['credentials_json'] or '{}')
+                    cal_data, cal_err = SyncWorker._fetch_caldav_static(
+                        caldav_source['url'], creds
+                    )
+                    if cal_data:
+                        evenements = cal_data.get('events', [])
+                    elif cal_err:
+                        print(f'[CalDAV fallback] {cal_err}')
+                except Exception as e:
+                    print(f'[CalDAV fallback] Erreur: {e}')
 
         # ── Imprimantes : depuis le cache Repetier/PrusaLink ──
         imprimantes = []

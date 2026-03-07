@@ -221,22 +221,38 @@ class SyncWorker:
     
     def _fetch_caldav(self, url, credentials):
         """Récupère les événements CalDAV (iCal format)."""
+        return SyncWorker._fetch_caldav_static(url, credentials)
+
+    @staticmethod
+    def _fetch_caldav_static(url, credentials):
+        """Récupère les événements CalDAV (iCal format) — méthode statique."""
         try:
             user = credentials.get('user', '')
             password = credentials.get('pass', '')
-            
+
             auth = (user, password) if user and password else None
-            
-            resp = requests.get(url, auth=auth, timeout=6)
+
+            print(f'[CalDAV] Fetch: {url} (auth={"oui" if auth else "non"})')
+            resp = requests.get(url, auth=auth, timeout=10)
             resp.raise_for_status()
-            
-            events = self._parse_ical(resp.text)
-            
+
+            content_type = resp.headers.get('Content-Type', '')
+            body = resp.text.strip()
+
+            # Vérifier qu'on reçoit bien de l'iCal et pas du HTML
+            if not body.startswith('BEGIN:VCALENDAR') and 'text/calendar' not in content_type:
+                print(f'[CalDAV] Réponse inattendue (type={content_type}, début={body[:100]})')
+                return None, f"CalDAV: réponse non-iCal (Content-Type: {content_type})"
+
+            events = SyncWorker._parse_ical(body)
+            print(f'[CalDAV] {len(events)} événements trouvés')
+
             return {
                 'events': events,
                 'fetched_at': datetime.now().isoformat(),
             }, ''
         except requests.RequestException as e:
+            print(f'[CalDAV] Erreur requête: {e}')
             return None, f"CalDAV: {str(e)}"
 
     @staticmethod
