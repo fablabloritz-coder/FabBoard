@@ -32,7 +32,7 @@
         {% endif %}
     </div>
     <div class="timer-target-date">
-        {{ date_cible ~ ' à ' ~ heure_cible if date_cible else '' }}
+        {% if date_cible %}{{ date_cible[8:10] ~ '/' ~ date_cible[5:7] ~ '/' ~ date_cible[:4] ~ ' à ' ~ heure_cible }}{% endif %}
     </div>
 
     <script>

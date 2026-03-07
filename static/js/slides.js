@@ -213,6 +213,7 @@ function setupEventListeners() {
         'btnAddSlide': openAddSlideModal,
         'btnSaveSlide': saveSlide,
         'btnDeleteSlide': deleteCurrentSlide,
+        'btnDeleteAllSlides': deleteAllSlides,
         'btnRefreshPreview': refreshPreview,
         'btnFullscreenPreview': openFullscreenPreview,
         'btnSaveWidgetConfig': saveWidgetConfig
@@ -710,7 +711,22 @@ async function saveSlide() {
         let newSlideId;
         
         if (slideId) {
-            // Modification
+            // Modification — si le layout change, nettoyer les widgets hors bornes
+            const slide = currentSlides.find(s => s.id == slideId);
+            if (slide && slide.layout_id !== layout_id) {
+                const newLayout = currentLayouts.find(l => l.id === layout_id);
+                if (newLayout) {
+                    const maxPositions = JSON.parse(newLayout.grille_json).length;
+                    const validWidgets = (slide.widgets || [])
+                        .filter(w => w.position < maxPositions)
+                        .map(w => ({
+                            widget_id: w.widget_id,
+                            position: w.position,
+                            config: JSON.parse(w.config_json || '{}')
+                        }));
+                    data.widgets = validWidgets;
+                }
+            }
             result = await apiCall(`/api/slides/${slideId}`, 'PUT', data);
             const index = currentSlides.findIndex(s => s.id == slideId);
             currentSlides[index] = result.data;
@@ -771,6 +787,44 @@ async function deleteCurrentSlide() {
             selectSlide(currentSlides[0].id);
         }
         
+    } catch (error) {
+        showToast('Erreur lors de la suppression', 'error');
+        console.error(error);
+    }
+}
+
+async function deleteAllSlides() {
+    if (currentSlides.length === 0) {
+        showToast('Aucune slide à supprimer', 'info');
+        return;
+    }
+
+    if (!confirm(`Voulez-vous vraiment supprimer les ${currentSlides.length} slide(s) ? Cette action est irréversible.`)) {
+        return;
+    }
+
+    try {
+        await apiCall('/api/slides/all', 'DELETE');
+
+        currentSlides = [];
+        selectedSlideId = null;
+
+        renderSlidesList();
+        document.getElementById('configContainer').innerHTML = `
+            <div class="config-placeholder">
+                <i class="bi bi-info-circle"></i>
+                <p>Toutes les slides ont été supprimées</p>
+            </div>
+        `;
+        document.getElementById('previewContainer').innerHTML = `
+            <div class="preview-placeholder">
+                <i class="bi bi-tv-fill"></i>
+                <p>Sélectionnez une slide</p>
+            </div>
+        `;
+        document.getElementById('btnDeleteSlide').style.display = 'none';
+
+        showToast('Toutes les slides ont été supprimées', 'success');
     } catch (error) {
         showToast('Erreur lors de la suppression', 'error');
         console.error(error);
@@ -1062,7 +1116,21 @@ const WIDGET_CONFIG_DEFINITIONS = {
         titre: 'Missions',
         fields: [
             { key: 'nombre_max', label: 'Nombre max par colonne', type: 'number', default: 10, min: 1, max: 50 },
+            { key: 'afficher_a_faire', label: 'Afficher "À faire"', type: 'checkbox', default: true },
+            { key: 'afficher_en_cours', label: 'Afficher "En cours"', type: 'checkbox', default: true },
+            { key: 'afficher_termine', label: 'Afficher "Terminé"', type: 'checkbox', default: true },
             ECHELLE_FIELD
+        ]
+    },
+    gif: {
+        titre: 'GIF',
+        fields: [
+            { key: 'gif_type', label: 'Source du GIF', type: 'select', options: [
+                { value: 'local', label: 'GIF local (uploadé)' },
+                { value: 'url', label: 'URL directe' }
+            ], default: 'local' },
+            { key: 'gif_url', label: 'GIF local', type: 'image_upload', default: '' },
+            { key: 'gif_direct_url', label: 'URL du GIF (.gif)', type: 'text', default: '', placeholder: 'https://media.tenor.com/.../tenor.gif' }
         ]
     }
 };
@@ -1088,6 +1156,16 @@ function configureWidget(slideId, position) {
     // Charger la config existante
     let currentConfig = {};
     try { currentConfig = JSON.parse(widget.config_json || '{}'); } catch(e) {}
+
+    // Compatibilité : migrer l'ancienne config Tenor vers URL directe
+    if (widgetCode === 'gif') {
+        if (currentConfig.gif_type === 'tenor') {
+            currentConfig.gif_type = 'url';
+        }
+        if (!currentConfig.gif_direct_url && currentConfig.tenor_gif_url) {
+            currentConfig.gif_direct_url = currentConfig.tenor_gif_url;
+        }
+    }
     
     // Stocker le contexte d'édition
     currentEditingWidgetConfig = { slideId, position, widgetCode };
@@ -1234,6 +1312,9 @@ function buildFieldHtml(field, value, sourcesCache) {
                 'value="' + escapeHtml(String(value || '')) + '">' +
                 '</div>';
 
+        case 'hidden':
+            return '<input type="hidden" data-config-key="' + field.key + '" value="' + escapeHtml(String(value || '')) + '">';
+
         default:
             return '';
     }
@@ -1278,6 +1359,27 @@ async function saveWidgetAdvancedConfig() {
     });
     
     try {
+        // Normaliser/résoudre les URLs GIF avant sauvegarde (ex: lien Tenor non direct)
+        if (widgetCode === 'gif' && newConfig.gif_type === 'url' && newConfig.gif_direct_url) {
+            const rawGifUrl = String(newConfig.gif_direct_url || '').trim();
+            if (rawGifUrl) {
+                newConfig.gif_direct_url = rawGifUrl;
+                try {
+                    const resolved = await apiCall('/api/gif/resolve?url=' + encodeURIComponent(rawGifUrl));
+                    if (resolved && resolved.success && resolved.url) {
+                        if (resolved.url !== rawGifUrl) {
+                            showToast('URL GIF convertie vers un lien direct', 'info');
+                        }
+                        newConfig.gif_direct_url = resolved.url;
+                    }
+                } catch (resolveError) {
+                    // On garde l'URL brute pour ne pas bloquer l'utilisateur.
+                    console.warn('Impossible de résoudre l\'URL GIF:', resolveError);
+                    showToast('URL GIF non vérifiée. Utilisez de préférence un lien direct .gif', 'warning');
+                }
+            }
+        }
+
         // Mettre à jour la config du widget dans la slide
         const slide = currentSlides.find(s => s.id === slideId);
         const widget = slide.widgets.find(w => w.position === position);

@@ -40,7 +40,7 @@ async function loadParametres() {
         const params = await apiCall('/api/parametres');
         document.getElementById('param-fablab-name').value = params.fablab_name || "Loritz'Lab";
         document.getElementById('param-refresh').value = params.refresh_interval || 30;
-        document.getElementById('param-theme').value = params.theme || 'dark';
+        document.getElementById('param-theme').value = params.theme || 'light';
         document.getElementById('param-police').value = params.police_dashboard || 'inter';
     } catch (error) {
         console.error('Erreur chargement paramètres:', error);

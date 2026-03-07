@@ -17,6 +17,7 @@ def get_db():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 
@@ -129,7 +130,7 @@ def init_db():
     -- Table du thème
     CREATE TABLE IF NOT EXISTS theme (
         id INTEGER PRIMARY KEY CHECK (id = 1), -- Une seule ligne
-        mode TEXT DEFAULT 'dark',              -- 'dark' ou 'light'
+        mode TEXT DEFAULT 'light',             -- 'dark' ou 'light'
         couleur_primaire TEXT DEFAULT '#ff6b35',
         couleur_secondaire TEXT DEFAULT '#004e89',
         couleur_succes TEXT DEFAULT '#28a745',
@@ -161,7 +162,7 @@ def init_db():
     if c.execute('SELECT COUNT(*) FROM parametres').fetchone()[0] == 0:
         c.executemany('INSERT OR IGNORE INTO parametres (cle, valeur) VALUES (?, ?)', [
             ('refresh_interval', '30'),
-            ('theme', 'dark'),
+            ('theme', 'light'),
             ('fablab_name', "Loritz'Lab"),
             ('show_fabtrack', '1'),
             ('show_calendar', '1'),
@@ -184,6 +185,12 @@ def init_db():
             # Moyen vertical (1×2) - 2 widgets empilés
             ('medium_v', 'Moyen (1×2)', '2 widgets verticaux', 1, 2,
              json.dumps([{"x": 0, "y": 0, "w": 1, "h": 1}, {"x": 0, "y": 1, "w": 1, "h": 1}])),
+            
+            # Grille 3×1 - 3 widgets horizontaux
+            ('grid_3x1', 'Grille (3×1)', '3 widgets horizontaux', 3, 1,
+             json.dumps([
+                 {"x": 0, "y": 0, "w": 1, "h": 1}, {"x": 1, "y": 0, "w": 1, "h": 1}, {"x": 2, "y": 0, "w": 1, "h": 1}
+             ])),
             
             # Grille 2×2 - 4 widgets égaux
             ('grid_2x2', 'Grille (2×2)', '4 widgets égaux', 2, 2,
@@ -255,6 +262,7 @@ def init_db():
             ('video', 'Vidéo', 'Affiche une vidéo locale ou YouTube/Dailymotion', '🎬', 'general'),
             ('timer', 'Timer', 'Compte à rebours vers une date/heure cible', '⏱️', 'general'),
             ('missions', 'Missions', 'Tableau kanban : à faire / en cours / terminé', '✅', 'general'),
+            ('gif', 'GIF', 'Affiche un GIF animé (Tenor ou local)', '🎞️', 'general'),
         ]
         
         c.executemany(
@@ -267,7 +275,7 @@ def init_db():
         c.execute('''
             INSERT INTO theme (id, mode, couleur_primaire, couleur_secondaire, 
                               couleur_succes, couleur_danger, couleur_warning, couleur_info, transition_speed)
-            VALUES (1, 'dark', '#ff6b35', '#004e89', '#28a745', '#dc3545', '#ffc107', '#17a2b8', 1000)
+            VALUES (1, 'light', '#ff6b35', '#004e89', '#28a745', '#dc3545', '#ffc107', '#17a2b8', 1000)
         ''')
 
     # ========== Créer une slide par défaut ==========
@@ -353,6 +361,26 @@ def migrate_db():
             updated_at TEXT DEFAULT (datetime('now','localtime'))
         )
     ''')
+
+    # Migration : ajouter le layout 'grid_3x1' s'il n'existe pas
+    if c.execute("SELECT COUNT(*) FROM layouts WHERE code = 'grid_3x1'").fetchone()[0] == 0:
+        import json
+        c.execute(
+            'INSERT INTO layouts (code, nom, description, colonnes, lignes, grille_json) VALUES (?, ?, ?, ?, ?, ?)',
+            ('grid_3x1', 'Grille (3×1)', '3 widgets horizontaux', 3, 1,
+             json.dumps([
+                 {"x": 0, "y": 0, "w": 1, "h": 1}, {"x": 1, "y": 0, "w": 1, "h": 1}, {"x": 2, "y": 0, "w": 1, "h": 1}
+             ]))
+        )
+        print('[FabBoard] Migration : layout grid_3x1 ajouté')
+
+    # Migration : ajouter le widget 'gif' s'il n'existe pas
+    if c.execute("SELECT COUNT(*) FROM widgets_disponibles WHERE code = 'gif'").fetchone()[0] == 0:
+        c.execute(
+            "INSERT INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?, ?, ?, ?, ?)",
+            ('gif', 'GIF', 'Affiche un GIF animé (Tenor ou local)', '🎞️', 'general')
+        )
+        print('[FabBoard] Migration : widget gif ajouté')
 
     conn.commit()
     conn.close()

@@ -297,13 +297,13 @@ async function displayCurrentSlide() {
         </div>
     `;
     
-    // Rendre chaque widget de manière asynchrone
+    // Rendre tous les widgets en parallèle
+    const renderPromises = [];
     for (let index = 0; index < grille.length; index++) {
         const widgetData = slide.widgets.find(w => w.position === index);
         const widgetElement = container.querySelector(`[data-position="${index}"]`);
         
         if (widgetData) {
-            // Appliquer l'échelle du widget
             const cfg = JSON.parse(widgetData.config_json || '{}');
             const echelle = cfg.echelle || '1';
             if (echelle !== '1') {
@@ -311,14 +311,17 @@ async function displayCurrentSlide() {
                 widgetElement.classList.add(scaleClass);
             }
 
-            const widgetHTML = await renderWidget(widgetData, slide.id, index);
-            injectWidgetHtml(widgetElement, widgetHTML);
+            renderPromises.push(
+                renderWidget(widgetData, slide.id, index).then(html => {
+                    injectWidgetHtml(widgetElement, html);
+                })
+            );
         } else {
-            // Emplacement vide → transparent
             widgetElement.classList.add('widget-slot-empty');
             widgetElement.innerHTML = '';
         }
     }
+    await Promise.all(renderPromises);
     
     // Mettre à jour l'horloge immédiatement
     updateClock();

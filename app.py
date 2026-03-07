@@ -16,8 +16,10 @@ from datetime import datetime, timedelta
 import os
 import json
 import secrets
+import re
 import requests
-from urllib.parse import quote
+from html import unescape
+from urllib.parse import quote, urlparse, urljoin
 from sync_worker import start_sync_worker, stop_sync_worker
 
 app = Flask(__name__)
@@ -31,8 +33,14 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogg'}
 PORT = int(os.environ.get('FABBOARD_PORT', 5580))
 
+# Cache statique : 1 heure pour les fichiers CSS/JS/images
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 3600
+
 # Cache mémoire pour météo Open-Meteo (pas besoin de clé API)
 _meteo_cache = {}  # {ville: {data, expires_at}}
+
+# Cache mémoire pour la résolution des URLs GIF distantes
+_gif_resolve_cache = {}  # {url: {resolved_url, expires_at}}
 
 # ── Clé secrète : générée aléatoirement au premier lancement, persistée ──
 _SECRET_KEY_PATH = os.path.join(DATA_DIR, 'secret_key.txt')
@@ -566,6 +574,9 @@ def api_update_parametre(cle):
         
         db.commit()
         return jsonify({'success': True, 'cle': cle, 'valeur': valeur})
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         db.close()
 
@@ -582,6 +593,8 @@ def api_get_sources():
         rows = db.execute('SELECT * FROM sources ORDER BY actif DESC, nom').fetchall()
         sources = [_serialize_source_public(row) for row in rows]
         return jsonify({'success': True, 'data': sources})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     finally:
         db.close()
 
@@ -628,6 +641,9 @@ def api_create_source():
         
         source = db.execute('SELECT * FROM sources WHERE id = ?', (source_id,)).fetchone()
         return jsonify({'success': True, 'data': _serialize_source_public(source)}), 201
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         db.close()
 
@@ -667,6 +683,9 @@ def api_update_source(id):
         
         source = db.execute('SELECT * FROM sources WHERE id = ?', (id,)).fetchone()
         return jsonify({'success': True, 'data': _serialize_source_public(source)})
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         db.close()
 
@@ -683,6 +702,9 @@ def api_delete_source(id):
             return jsonify({'error': 'Source non trouvée'}), 404
         
         return jsonify({'success': True})
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         db.close()
 
@@ -791,6 +813,8 @@ def api_test_source(id):
             _mark_test_result(False, err)
             return jsonify({'success': False, 'error': err, 'url': base_url}), 400
 
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     finally:
         db.close()
 
@@ -813,6 +837,9 @@ def api_resync_source(id):
         db.execute('DELETE FROM sources_cache WHERE source_id = ?', (id,))
         db.commit()
         return jsonify({'success': True})
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
     finally:
         db.close()
 
@@ -970,9 +997,10 @@ def api_refresh_cache(source_id):
                 'hint': 'Le worker de sync n\'est pas actif. Les caches seront mis à jour lors du prochain cycle de polling.'
             }), 503
         
-        # Forcer la synchronisation
+        # Forcer la synchronisation en réinitialisant derniere_sync et le cache
         db = get_db()
-        db.execute('UPDATE sources SET sync_interval_sec = 0 WHERE id = ?', (source_id,))
+        db.execute('UPDATE sources SET derniere_sync = NULL WHERE id = ?', (source_id,))
+        db.execute('DELETE FROM sources_cache WHERE source_id = ?', (source_id,))
         db.commit()
         db.close()
         
@@ -1096,11 +1124,22 @@ def api_update_slide(id):
         
         # Mettre à jour les widgets si fournis
         if 'widgets' in data and isinstance(data['widgets'], list):
+            # Valider : dédupliquer par position (garder le dernier)
+            layout = db.execute('SELECT grille_json FROM layouts WHERE id = ?',
+                                (data.get('layout_id', existing['layout_id']),)).fetchone()
+            max_positions = len(json.loads(layout['grille_json'])) if layout else 999
+            
+            seen_positions = {}
+            for widget_data in data['widgets']:
+                pos = widget_data['position']
+                if pos < max_positions:
+                    seen_positions[pos] = widget_data
+            
             # Supprimer les anciens widgets
             db.execute('DELETE FROM slide_widgets WHERE slide_id = ?', (id,))
             
-            # Ajouter les nouveaux
-            for widget_data in data['widgets']:
+            # Ajouter les nouveaux (dédupliqués, positions valides)
+            for widget_data in seen_positions.values():
                 db.execute('''
                     INSERT INTO slide_widgets (slide_id, widget_id, position, config_json)
                     VALUES (?, ?, ?, ?)
@@ -1156,6 +1195,22 @@ def api_reorder_slides():
         for index, slide_id in enumerate(data['order']):
             db.execute('UPDATE slides SET ordre = ? WHERE id = ?', (index + 1, slide_id))
         
+        db.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/slides/all', methods=['DELETE'])
+def api_delete_all_slides():
+    """Supprime toutes les slides et leurs widgets associés."""
+    db = get_db()
+    try:
+        db.execute('DELETE FROM slide_widgets')
+        db.execute('DELETE FROM slides')
         db.commit()
         return jsonify({'success': True})
     except Exception as e:
@@ -1539,6 +1594,7 @@ def api_meteo():
             'icon': icon,
             'ville': resolved_name,
             'pays': country,
+            'weather_code': wmo_code,
         }
 
         # Cacher 15 minutes
@@ -1551,6 +1607,111 @@ def api_meteo():
 
     except requests.RequestException as e:
         return jsonify({'error': f'Erreur météo: {str(e)}'}), 502
+
+
+def _extract_gif_url_from_html(html_text, base_url=''):
+    """Extrait une URL GIF directe depuis du HTML (og:image, twitter:image, media.tenor.com)."""
+    if not html_text:
+        return ''
+
+    patterns = [
+        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+        r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
+        r'https://media\.tenor\.com/[^"\'\s>]+?\.gif(?:\?[^"\'\s>]*)?',
+        r'https://[^"\'\s>]+?\.gif(?:\?[^"\'\s>]*)?',
+    ]
+
+    for pattern in patterns:
+        m = re.search(pattern, html_text, flags=re.IGNORECASE)
+        if not m:
+            continue
+
+        raw_url = m.group(1) if m.lastindex else m.group(0)
+        candidate = unescape(raw_url).strip()
+        if not candidate:
+            continue
+
+        if base_url:
+            candidate = urljoin(base_url, candidate)
+
+        parsed = urlparse(candidate)
+        if parsed.scheme in ('http', 'https') and '.gif' in candidate.lower():
+            return candidate
+
+    return ''
+
+
+@app.route('/api/gif/resolve')
+def api_resolve_gif_url():
+    """Résout une URL (page/shortlink) vers une URL GIF directe utilisable par le widget."""
+    raw_url = (request.args.get('url') or '').strip()
+    if not raw_url:
+        return jsonify({'success': False, 'error': 'Paramètre url requis'}), 400
+
+    parsed = urlparse(raw_url)
+    if parsed.scheme not in ('http', 'https'):
+        return jsonify({'success': False, 'error': 'URL invalide (http/https requis)'}), 400
+
+    now = datetime.utcnow()
+    cached = _gif_resolve_cache.get(raw_url)
+    if cached and cached.get('expires_at') and cached['expires_at'] > now:
+        return jsonify({'success': True, 'url': cached['resolved_url'], 'cached': True})
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (FabBoard GIF Resolver)'
+    }
+
+    try:
+        # 1) Tentative directe (suivre redirects)
+        resp = requests.get(raw_url, headers=headers, timeout=8, allow_redirects=True)
+        final_url = resp.url
+        content_type = (resp.headers.get('Content-Type') or '').lower()
+
+        if 'image/gif' in content_type or final_url.lower().endswith('.gif'):
+            _gif_resolve_cache[raw_url] = {
+                'resolved_url': final_url,
+                'expires_at': now + timedelta(hours=24),
+            }
+            return jsonify({'success': True, 'url': final_url, 'resolved': final_url != raw_url})
+
+        # 2) Si page HTML, extraire une vraie URL GIF
+        html_text = resp.text if 'text/html' in content_type else ''
+        extracted = _extract_gif_url_from_html(html_text, final_url)
+        if extracted:
+            _gif_resolve_cache[raw_url] = {
+                'resolved_url': extracted,
+                'expires_at': now + timedelta(hours=24),
+            }
+            return jsonify({'success': True, 'url': extracted, 'resolved': True})
+
+        # 3) Fallback : HEAD sur URL finale (quelques serveurs renvoient un type valide uniquement en HEAD)
+        head = requests.head(final_url, headers=headers, timeout=5, allow_redirects=True)
+        head_type = (head.headers.get('Content-Type') or '').lower()
+        if 'image/gif' in head_type or head.url.lower().endswith('.gif'):
+            _gif_resolve_cache[raw_url] = {
+                'resolved_url': head.url,
+                'expires_at': now + timedelta(hours=24),
+            }
+            return jsonify({'success': True, 'url': head.url, 'resolved': True})
+
+        return jsonify({
+            'success': False,
+            'error': 'URL non résolue en GIF direct. Utilisez un lien se terminant par .gif (ex: media.tenor.com/.../tenor.gif).',
+            'url': raw_url,
+        }), 422
+
+    except requests.RequestException as e:
+        return jsonify({'success': False, 'error': f'Erreur réseau: {str(e)}', 'url': raw_url}), 502
+
+
+# ============================================================
+# API — TENOR (Proxy GIF)
+# ============================================================
+
+@app.route('/api/tenor/search')
+def api_tenor_search():
+    """Endpoint désactivé - Tenor n'est plus disponible."""
+    return jsonify({'error': 'L\'API Tenor n\'est plus disponible. Utilisez un GIF local ou une URL directe.'}), 410
 
 
 def _wmo_to_description(code):

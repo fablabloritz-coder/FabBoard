@@ -151,6 +151,19 @@
             detailsEl.innerHTML = '<span>💧 ' + esc(String(m.humidity)) + '%</span>'
                 + '<span>💨 ' + esc(String(m.wind_speed)) + ' km/h</span>';
             
+            // Appliquer la classe d'animation selon le code météo
+            const widgetEl = document.getElementById('widget-meteo-' + widgetId);
+            if (widgetEl) {
+                widgetEl.classList.remove('meteo-sunny','meteo-cloudy','meteo-rain','meteo-snow','meteo-storm','meteo-fog');
+                const wc = m.weather_code || 0;
+                if (wc === 0 || wc === 1) widgetEl.classList.add('meteo-sunny');
+                else if (wc >= 2 && wc <= 3) widgetEl.classList.add('meteo-cloudy');
+                else if (wc >= 45 && wc <= 48) widgetEl.classList.add('meteo-fog');
+                else if ((wc >= 51 && wc <= 67) || (wc >= 80 && wc <= 82)) widgetEl.classList.add('meteo-rain');
+                else if ((wc >= 71 && wc <= 77) || (wc >= 85 && wc <= 86)) widgetEl.classList.add('meteo-snow');
+                else if (wc >= 95) widgetEl.classList.add('meteo-storm');
+            }
+
             loadingEl.style.display = 'none';
             contentEl.style.display = 'block';
             errorEl.style.display = 'none';
