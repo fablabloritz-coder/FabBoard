@@ -103,7 +103,7 @@ class SyncWorker:
                     (str(e), source_id)
                 )
                 db.commit()
-            except:
+            except Exception:
                 pass
     
     def _should_sync(self, source):
@@ -115,7 +115,7 @@ class SyncWorker:
             last_sync = datetime.fromisoformat(source['derniere_sync'])
             sync_interval = timedelta(seconds=source.get('sync_interval_sec', 60))
             return datetime.now() >= last_sync + sync_interval
-        except:
+        except (ValueError, TypeError):
             return True
     
     def _fetch_source_data(self, source):

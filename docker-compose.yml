@@ -7,11 +7,21 @@ services:
     container_name: fabboard
     restart: unless-stopped
     ports:
-      - "5580:5580"
+      - "${FABBOARD_PORT:-5580}:5580"
     environment:
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-}
+      FLASK_DEBUG: "0"
       TZ: ${TZ:-Europe/Paris}
       # URL Fabtrack pour interconnexion Phase 2 (adapter l'IP/hostname du serveur)
       FABTRACK_URL: ${FABTRACK_URL:-http://host.docker.internal:5555}
     volumes:
       - ${FABBOARD_DATA_PATH:-./docker-data/data}:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 512M

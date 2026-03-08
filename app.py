@@ -17,12 +17,17 @@ import os
 import json
 import secrets
 import re
+import logging
 import requests
 from html import unescape
 from urllib.parse import quote, urlparse, urljoin
 from sync_worker import start_sync_worker, stop_sync_worker
 
 app = Flask(__name__)
+
+# Logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -32,6 +37,9 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogg'}
 PORT = int(os.environ.get('FABBOARD_PORT', 5580))
+
+# Limite de taille des uploads (16 Mo)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # Cache statique : 1 heure pour les fichiers CSS/JS/images
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 3600
@@ -69,6 +77,27 @@ try:
     print('[App] Sync worker démarré!')
 except Exception as e:
     print(f'[App] Erreur démarrage worker: {e}')
+
+# ============================================================
+# ERROR HANDLERS
+# ============================================================
+
+@app.errorhandler(404)
+def page_not_found(e):
+    if request.path.startswith('/api/'):
+        return jsonify({'error': 'Ressource introuvable'}), 404
+    return render_template('base.html'), 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    logger.error('Erreur interne: %s', e)
+    if request.path.startswith('/api/'):
+        return jsonify({'error': 'Erreur interne du serveur'}), 500
+    return render_template('base.html'), 500
+
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify({'success': False, 'error': 'Fichier trop volumineux (max 16 Mo)'}), 413
 
 # ============================================================
 # INIT
@@ -847,35 +876,6 @@ def api_resync_source(id):
 # ============================================================
 # API — CACHE ET WORKER (Phase 3)
 # ============================================================
-
-@app.route('/api/worker/start-debug', methods=['POST'])
-def api_worker_start_debug():
-    """Force le démarrage du worker (debug seulement)."""
-    from sync_worker import start_sync_worker, get_sync_worker
-    
-    try:
-        print('[DEBUG] Appel start_sync_worker...')
-        w = start_sync_worker(poll_interval=10)
-        print(f'[DEBUG] get_sync_worker retourne: {w}')
-        print(f'[DEBUG] worker.running = {w.running if w else "None"}')
-        
-        w2 = get_sync_worker()
-        print(f'[DEBUG] get_sync_worker() = {w2}')
-        
-        return jsonify({
-            'success': True,
-            '_result': str(w),
-            '_w2': str(w2),
-            '_running': w.running if w else False
-        })
-    except Exception as e:
-        import traceback
-        print(f'[ERROR] {e}')
-        print(traceback.format_exc())
-        return jsonify({
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 500
 
 @app.route('/api/worker/status', methods=['GET'])
 def api_worker_status():
@@ -1789,4 +1789,5 @@ def shutdown_sync_worker(exception=None):
 
 if __name__ == '__main__':
     print(f'[FabBoard] Démarrage sur http://localhost:{PORT}')
-    app.run(host='0.0.0.0', port=PORT, debug=True)
+    debug_mode = os.environ.get('FLASK_DEBUG', '1').lower() in ('1', 'true', 'yes')
+    app.run(host='0.0.0.0', port=PORT, debug=debug_mode)

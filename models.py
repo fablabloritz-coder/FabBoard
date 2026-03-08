@@ -144,6 +144,7 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_slides_ordre ON slides(ordre);
     CREATE INDEX IF NOT EXISTS idx_slides_actif ON slides(actif);
     CREATE INDEX IF NOT EXISTS idx_slide_widgets_slide ON slide_widgets(slide_id);
+    CREATE INDEX IF NOT EXISTS idx_sources_cache_source ON sources_cache(source_id);
 
     -- Table des missions (kanban)
     CREATE TABLE IF NOT EXISTS missions (
@@ -399,12 +400,7 @@ def reset_db():
 def get_all_slides(include_inactive=False):
     """
     Retourne toutes les slides avec leurs widgets.
-    
-    Args:
-        include_inactive (bool): Inclure les slides inactives
-        
-    Returns:
-        list: Liste de dict avec structure complète des slides
+    Optimisé : 2 requêtes au lieu de N+1.
     """
     conn = get_db()
     
@@ -423,24 +419,36 @@ def get_all_slides(include_inactive=False):
         ORDER BY s.ordre
     '''
     
-    slides = []
-    for row in conn.execute(query).fetchall():
-        slide = dict(row)
-        
-        # Charger les widgets associés
-        widgets_query = '''
-            SELECT sw.*, w.code as widget_code, w.nom as widget_nom, 
-                   w.icone, w.categorie, w.description
-            FROM slide_widgets sw
-            JOIN widgets_disponibles w ON sw.widget_id = w.id
-            WHERE sw.slide_id = ?
-            ORDER BY sw.position
-        '''
-        
-        slide['widgets'] = [dict(w) for w in conn.execute(widgets_query, (slide['id'],)).fetchall()]
-        slides.append(slide)
-    
+    slides_rows = conn.execute(query).fetchall()
+    if not slides_rows:
+        conn.close()
+        return []
+
+    slides = [dict(row) for row in slides_rows]
+    slide_ids = [s['id'] for s in slides]
+
+    # Charger TOUS les widgets en une seule requête
+    placeholders = ','.join('?' * len(slide_ids))
+    widgets_query = f'''
+        SELECT sw.*, w.code as widget_code, w.nom as widget_nom, 
+               w.icone, w.categorie, w.description
+        FROM slide_widgets sw
+        JOIN widgets_disponibles w ON sw.widget_id = w.id
+        WHERE sw.slide_id IN ({placeholders})
+        ORDER BY sw.position
+    '''
+    all_widgets = conn.execute(widgets_query, slide_ids).fetchall()
     conn.close()
+
+    # Grouper par slide_id
+    widgets_by_slide = {}
+    for w in all_widgets:
+        wd = dict(w)
+        widgets_by_slide.setdefault(wd['slide_id'], []).append(wd)
+
+    for slide in slides:
+        slide['widgets'] = widgets_by_slide.get(slide['id'], [])
+    
     return slides
 
 
