@@ -210,13 +210,90 @@ Pour trouver l'IP du serveur : `hostname -I | awk '{print $1}'`
 | `TZ` | Fuseau horaire | `Europe/Paris` |
 | `FABTRACK_URL` | URL de Fabtrack pour le bootstrap automatique | `http://host.docker.internal:5555` |
 
-#### Mise à jour
+#### Mise a jour / arret / relance (procedures precises)
+
+##### A. FabBoard seul (docker-compose individuel)
+
+Mise a jour:
+
+```bash
+cd /chemin/vers/FabBoard
+git pull --ff-only origin main
+docker compose up -d --build
+docker compose ps
+```
+
+Arret:
+
+```bash
+cd /chemin/vers/FabBoard
+docker compose stop
+```
+
+Relance sans rebuild:
+
+```bash
+cd /chemin/vers/FabBoard
+docker compose start
+```
+
+Redemarrage complet:
+
+```bash
+cd /chemin/vers/FabBoard
+docker compose restart
+```
+
+##### B. Suite complete (PretGo + Fabtrack + FabBoard)
+
+Mise a jour des 3 applications:
 
 ```bash
 cd ~/fablab
-git -C PretGo pull
-git -C Fabtrack pull
-git -C FabBoard pull
+git -C PretGo pull --ff-only origin main
+git -C Fabtrack pull --ff-only origin main
+git -C FabBoard pull --ff-only origin main
+docker compose up -d --build
+docker compose ps
+```
+
+Arret des 3 applications:
+
+```bash
+cd ~/fablab
+docker compose stop
+```
+
+Relance des 3 applications:
+
+```bash
+cd ~/fablab
+docker compose start
+```
+
+Redemarrage des 3 applications:
+
+```bash
+cd ~/fablab
+docker compose restart
+```
+
+Diagnostic rapide:
+
+```bash
+cd ~/fablab
+docker compose ps
+docker logs --tail=120 fabboard
+docker logs --tail=120 fabtrack
+docker logs --tail=120 pretgo
+```
+
+En cas de conflit `container name ... already in use`:
+
+```bash
+docker stop fabboard 2>/dev/null || true
+docker rm fabboard
+cd /chemin/vers/FabBoard
 docker compose up -d --build
 ```
 
