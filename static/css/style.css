@@ -29,16 +29,21 @@ body {
     font-size: 1.5rem;
     display: inline-flex;
     align-items: center;
+    overflow: hidden;
 }
 
 .navbar-logo {
     width: 32px;
     height: 32px;
+    max-width: 32px;
+    max-height: 32px;
     object-fit: contain;
+    flex-shrink: 0;
 }
 
 .navbar {
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    overflow: hidden;
 }
 
 /* Badges d'urgence */
@@ -180,6 +185,8 @@ body.light-mode .table {
     .navbar-logo {
         width: 26px;
         height: 26px;
+        max-width: 26px;
+        max-height: 26px;
     }
 }
 
