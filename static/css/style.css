@@ -27,6 +27,14 @@ body {
 .navbar-brand {
     font-weight: 700;
     font-size: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+}
+
+.navbar-logo {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
 }
 
 .navbar {
@@ -167,6 +175,11 @@ body.light-mode .table {
 @media (max-width: 768px) {
     .navbar-brand {
         font-size: 1.2rem;
+    }
+
+    .navbar-logo {
+        width: 26px;
+        height: 26px;
     }
 }
 

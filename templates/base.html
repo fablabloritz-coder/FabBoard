@@ -22,6 +22,7 @@
     
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/favicon.png') }}">
 </head>
 <body class="{% block body_class %}{% endblock %}">
     
@@ -31,7 +32,8 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('dashboard') }}">
-                <i class="bi bi-display"></i> FabBoard
+                <img src="{{ url_for('static', filename='img/logo-fabboard.png') }}" alt="FabBoard" class="navbar-logo me-2">
+                <span>FabBoard</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
