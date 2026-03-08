@@ -1,5 +1,8 @@
 # FabBoard
 
+<img width="520" height="520" alt="logo fabboard" src="https://github.com/user-attachments/assets/b806fd6c-6712-4771-accc-bd4646e1ea89" />
+
+
 **Dashboard TV temps réel pour Fablab** — Affiche statistiques, calendrier, météo et état des machines sur un écran dédié via un système de slides configurables.
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)
