@@ -297,6 +297,50 @@ cd /chemin/vers/FabBoard
 docker compose up -d --build
 ```
 
+Depannage: applications inaccessibles depuis le navigateur
+
+1. Verifier l'etat des conteneurs:
+
+```bash
+docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | egrep "fabboard|fabtrack|pretgo"
+```
+
+2. En cas de conflit de nom, nettoyer puis relancer:
+
+```bash
+docker stop fabboard fabtrack pretgo 2>/dev/null || true
+docker rm fabboard fabtrack pretgo 2>/dev/null || true
+```
+
+3. Choisir un seul mode de deploiement:
+
+```bash
+# Mode stack unique
+cd ~/fablab
+docker compose up -d --build
+
+# Ou mode applications separees
+cd /chemin/vers/Fabtrack && docker compose up -d --build
+cd /chemin/vers/FabBoard && docker compose up -d --build
+```
+
+4. Verifier les logs et la reponse locale serveur:
+
+```bash
+docker logs --tail=120 fabtrack
+docker logs --tail=120 fabboard
+curl -I http://127.0.0.1:5555
+curl -I http://127.0.0.1:5580
+```
+
+5. Si local OK mais acces distant KO, verifier le firewall:
+
+```bash
+sudo ufw allow 5555/tcp
+sudo ufw allow 5580/tcp
+sudo ufw status
+```
+
 #### Sauvegarde
 
 Les données sont dans des volumes Docker nommés. Pour sauvegarder :
