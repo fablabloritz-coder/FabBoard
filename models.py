@@ -17,6 +17,7 @@ def get_db():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 
@@ -59,6 +60,15 @@ def init_db():
         UNIQUE(source_id, uid)
     );
 
+    -- Table cache des données sources (Phase 3)
+    CREATE TABLE IF NOT EXISTS sources_cache (
+        source_id INTEGER PRIMARY KEY,
+        data_json TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        fetched_at TEXT DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (source_id) REFERENCES sources(id) ON DELETE CASCADE
+    );
+
     -- Table des paramètres (clé-valeur)
     CREATE TABLE IF NOT EXISTS parametres (
         cle TEXT PRIMARY KEY,
@@ -67,6 +77,7 @@ def init_db():
 
     -- Index pour améliorer les performances
     CREATE INDEX IF NOT EXISTS idx_evenements_date_debut ON evenements_calendrier(date_debut);
+    CREATE INDEX IF NOT EXISTS idx_sources_cache_expires ON sources_cache(expires_at);
 
     -- ========== PHASE 1.5 : SYSTÈME DE SLIDES ==========
 
@@ -119,7 +130,7 @@ def init_db():
     -- Table du thème
     CREATE TABLE IF NOT EXISTS theme (
         id INTEGER PRIMARY KEY CHECK (id = 1), -- Une seule ligne
-        mode TEXT DEFAULT 'dark',              -- 'dark' ou 'light'
+        mode TEXT DEFAULT 'light',             -- 'dark' ou 'light'
         couleur_primaire TEXT DEFAULT '#ff6b35',
         couleur_secondaire TEXT DEFAULT '#004e89',
         couleur_succes TEXT DEFAULT '#28a745',
@@ -133,13 +144,26 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_slides_ordre ON slides(ordre);
     CREATE INDEX IF NOT EXISTS idx_slides_actif ON slides(actif);
     CREATE INDEX IF NOT EXISTS idx_slide_widgets_slide ON slide_widgets(slide_id);
+    CREATE INDEX IF NOT EXISTS idx_sources_cache_source ON sources_cache(source_id);
+
+    -- Table des missions (kanban)
+    CREATE TABLE IF NOT EXISTS missions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        titre TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        statut TEXT NOT NULL DEFAULT 'a_faire',  -- 'a_faire', 'en_cours', 'termine'
+        priorite INTEGER DEFAULT 0,              -- 0=normal, 1=haute, 2=urgente
+        ordre INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now','localtime')),
+        updated_at TEXT DEFAULT (datetime('now','localtime'))
+    );
     ''')
 
     # Insérer les paramètres par défaut si la table est vide
     if c.execute('SELECT COUNT(*) FROM parametres').fetchone()[0] == 0:
         c.executemany('INSERT OR IGNORE INTO parametres (cle, valeur) VALUES (?, ?)', [
             ('refresh_interval', '30'),
-            ('theme', 'dark'),
+            ('theme', 'light'),
             ('fablab_name', "Loritz'Lab"),
             ('show_fabtrack', '1'),
             ('show_calendar', '1'),
@@ -162,6 +186,12 @@ def init_db():
             # Moyen vertical (1×2) - 2 widgets empilés
             ('medium_v', 'Moyen (1×2)', '2 widgets verticaux', 1, 2,
              json.dumps([{"x": 0, "y": 0, "w": 1, "h": 1}, {"x": 0, "y": 1, "w": 1, "h": 1}])),
+            
+            # Grille 3×1 - 3 widgets horizontaux
+            ('grid_3x1', 'Grille (3×1)', '3 widgets horizontaux', 3, 1,
+             json.dumps([
+                 {"x": 0, "y": 0, "w": 1, "h": 1}, {"x": 1, "y": 0, "w": 1, "h": 1}, {"x": 2, "y": 0, "w": 1, "h": 1}
+             ])),
             
             # Grille 2×2 - 4 widgets égaux
             ('grid_2x2', 'Grille (2×2)', '4 widgets égaux', 2, 2,
@@ -229,6 +259,11 @@ def init_db():
             ('imprimantes', 'Imprimantes 3D', 'État des imprimantes 3D', '🖨️', 'imprimantes'),
             ('meteo', 'Météo', 'Météo locale', '🌤️', 'general'),
             ('texte_libre', 'Texte libre', 'Zone de texte personnalisée', '📝', 'general'),
+            ('image', 'Image', 'Affiche une image (JPG, PNG)', '🖼️', 'general'),
+            ('video', 'Vidéo', 'Affiche une vidéo locale ou YouTube/Dailymotion', '🎬', 'general'),
+            ('timer', 'Timer', 'Compte à rebours vers une date/heure cible', '⏱️', 'general'),
+            ('missions', 'Missions', 'Tableau kanban : à faire / en cours / terminé', '✅', 'general'),
+            ('gif', 'GIF', 'Affiche un GIF animé (Tenor ou local)', '🎞️', 'general'),
         ]
         
         c.executemany(
@@ -241,7 +276,7 @@ def init_db():
         c.execute('''
             INSERT INTO theme (id, mode, couleur_primaire, couleur_secondaire, 
                               couleur_succes, couleur_danger, couleur_warning, couleur_info, transition_speed)
-            VALUES (1, 'dark', '#ff6b35', '#004e89', '#28a745', '#dc3545', '#ffc107', '#17a2b8', 1000)
+            VALUES (1, 'light', '#ff6b35', '#004e89', '#28a745', '#dc3545', '#ffc107', '#17a2b8', 1000)
         ''')
 
     # ========== Créer une slide par défaut ==========
@@ -270,6 +305,88 @@ def init_db():
     print(f'[FabBoard] Base de données initialisée : {DB_PATH}')
 
 
+def migrate_db():
+    """Migrations incrémentales pour les bases de données existantes."""
+    conn = get_db()
+    c = conn.cursor()
+
+    # Migration : ajouter le widget 'image' s'il n'existe pas
+    if c.execute("SELECT COUNT(*) FROM widgets_disponibles WHERE code = 'image'").fetchone()[0] == 0:
+        c.execute(
+            "INSERT INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?, ?, ?, ?, ?)",
+            ('image', 'Image', 'Affiche une image (JPG, PNG)', '🖼️', 'general')
+        )
+        print('[FabBoard] Migration : widget image ajouté')
+
+    # Migration : ajouter les colonnes fond_type/fond_valeur à la table slides
+    columns = [row[1] for row in c.execute("PRAGMA table_info(slides)").fetchall()]
+    if 'fond_type' not in columns:
+        c.execute("ALTER TABLE slides ADD COLUMN fond_type TEXT DEFAULT 'defaut'")
+        c.execute("ALTER TABLE slides ADD COLUMN fond_valeur TEXT DEFAULT ''")
+        print('[FabBoard] Migration : colonnes fond_type/fond_valeur ajoutées à slides')
+
+    # Migration : ajouter le widget 'video' s'il n'existe pas
+    if c.execute("SELECT COUNT(*) FROM widgets_disponibles WHERE code = 'video'").fetchone()[0] == 0:
+        c.execute(
+            "INSERT INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?, ?, ?, ?, ?)",
+            ('video', 'Vidéo', 'Affiche une vidéo locale ou YouTube/Dailymotion', '🎬', 'general')
+        )
+        print('[FabBoard] Migration : widget video ajouté')
+
+    # Migration : ajouter le widget 'timer' s'il n'existe pas
+    if c.execute("SELECT COUNT(*) FROM widgets_disponibles WHERE code = 'timer'").fetchone()[0] == 0:
+        c.execute(
+            "INSERT INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?, ?, ?, ?, ?)",
+            ('timer', 'Timer', 'Compte à rebours vers une date/heure cible', '⏱️', 'general')
+        )
+        print('[FabBoard] Migration : widget timer ajouté')
+
+    # Migration : ajouter le widget 'missions' s'il n'existe pas
+    if c.execute("SELECT COUNT(*) FROM widgets_disponibles WHERE code = 'missions'").fetchone()[0] == 0:
+        c.execute(
+            "INSERT INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?, ?, ?, ?, ?)",
+            ('missions', 'Missions', 'Tableau kanban : à faire / en cours / terminé', '✅', 'general')
+        )
+        print('[FabBoard] Migration : widget missions ajouté')
+
+    # Migration : créer la table missions
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS missions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            titre TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            statut TEXT NOT NULL DEFAULT 'a_faire',  -- 'a_faire', 'en_cours', 'termine'
+            priorite INTEGER DEFAULT 0,              -- 0=normal, 1=haute, 2=urgente
+            ordre INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now','localtime')),
+            updated_at TEXT DEFAULT (datetime('now','localtime'))
+        )
+    ''')
+
+    # Migration : ajouter le layout 'grid_3x1' s'il n'existe pas
+    if c.execute("SELECT COUNT(*) FROM layouts WHERE code = 'grid_3x1'").fetchone()[0] == 0:
+        import json
+        c.execute(
+            'INSERT INTO layouts (code, nom, description, colonnes, lignes, grille_json) VALUES (?, ?, ?, ?, ?, ?)',
+            ('grid_3x1', 'Grille (3×1)', '3 widgets horizontaux', 3, 1,
+             json.dumps([
+                 {"x": 0, "y": 0, "w": 1, "h": 1}, {"x": 1, "y": 0, "w": 1, "h": 1}, {"x": 2, "y": 0, "w": 1, "h": 1}
+             ]))
+        )
+        print('[FabBoard] Migration : layout grid_3x1 ajouté')
+
+    # Migration : ajouter le widget 'gif' s'il n'existe pas
+    if c.execute("SELECT COUNT(*) FROM widgets_disponibles WHERE code = 'gif'").fetchone()[0] == 0:
+        c.execute(
+            "INSERT INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?, ?, ?, ?, ?)",
+            ('gif', 'GIF', 'Affiche un GIF animé (Tenor ou local)', '🎞️', 'general')
+        )
+        print('[FabBoard] Migration : widget gif ajouté')
+
+    conn.commit()
+    conn.close()
+
+
 def reset_db():
     """Réinitialise la base de données (ATTENTION : supprime toutes les données)."""
     if os.path.exists(DB_PATH):
@@ -283,12 +400,7 @@ def reset_db():
 def get_all_slides(include_inactive=False):
     """
     Retourne toutes les slides avec leurs widgets.
-    
-    Args:
-        include_inactive (bool): Inclure les slides inactives
-        
-    Returns:
-        list: Liste de dict avec structure complète des slides
+    Optimisé : 2 requêtes au lieu de N+1.
     """
     conn = get_db()
     
@@ -307,24 +419,36 @@ def get_all_slides(include_inactive=False):
         ORDER BY s.ordre
     '''
     
-    slides = []
-    for row in conn.execute(query).fetchall():
-        slide = dict(row)
-        
-        # Charger les widgets associés
-        widgets_query = '''
-            SELECT sw.*, w.code as widget_code, w.nom as widget_nom, 
-                   w.icone, w.categorie, w.description
-            FROM slide_widgets sw
-            JOIN widgets_disponibles w ON sw.widget_id = w.id
-            WHERE sw.slide_id = ?
-            ORDER BY sw.position
-        '''
-        
-        slide['widgets'] = [dict(w) for w in conn.execute(widgets_query, (slide['id'],)).fetchall()]
-        slides.append(slide)
-    
+    slides_rows = conn.execute(query).fetchall()
+    if not slides_rows:
+        conn.close()
+        return []
+
+    slides = [dict(row) for row in slides_rows]
+    slide_ids = [s['id'] for s in slides]
+
+    # Charger TOUS les widgets en une seule requête
+    placeholders = ','.join('?' * len(slide_ids))
+    widgets_query = f'''
+        SELECT sw.*, w.code as widget_code, w.nom as widget_nom, 
+               w.icone, w.categorie, w.description
+        FROM slide_widgets sw
+        JOIN widgets_disponibles w ON sw.widget_id = w.id
+        WHERE sw.slide_id IN ({placeholders})
+        ORDER BY sw.position
+    '''
+    all_widgets = conn.execute(widgets_query, slide_ids).fetchall()
     conn.close()
+
+    # Grouper par slide_id
+    widgets_by_slide = {}
+    for w in all_widgets:
+        wd = dict(w)
+        widgets_by_slide.setdefault(wd['slide_id'], []).append(wd)
+
+    for slide in slides:
+        slide['widgets'] = widgets_by_slide.get(slide['id'], [])
+    
     return slides
 
 

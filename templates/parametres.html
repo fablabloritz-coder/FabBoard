@@ -4,11 +4,11 @@
 
 {% block content %}
 <div class="container py-5">
-    
+
     <h1 class="mb-4"><i class="bi bi-gear"></i> Paramètres</h1>
-    
+
     <div class="row">
-        
+
         <!-- Configuration générale -->
         <div class="col-md-6 mb-4">
             <div class="card">
@@ -29,9 +29,17 @@
                         
                         <div class="mb-3">
                             <label for="param-theme" class="form-label">Thème</label>
-                            <select class="form-select" id="param-theme">
-                                <option value="light">Clair</option>
-                                <option value="dark" selected>Sombre</option>
+                        <div class="mb-3">
+                            <label for="param-police" class="form-label">Police du dashboard TV</label>
+                            <select class="form-select" id="param-police">
+                                <option value="inter">Inter (par défaut)</option>
+                                <option value="roboto">Roboto</option>
+                                <option value="poppins">Poppins</option>
+                                <option value="montserrat">Montserrat</option>
+                                <option value="opensans">Open Sans</option>
+                                <option value="sourcesans">Source Sans</option>
+                                <option value="orbitron">Orbitron (futuriste)</option>
+                                <option value="rajdhani">Rajdhani (tech)</option>
                             </select>
                         </div>
 
@@ -52,33 +60,7 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Sources de données -->
-        <div class="col-md-6 mb-4">
-            <div class="card">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0"><i class="bi bi-database"></i> Sources de Données</h5>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted">Configuration des sources externes (Fabtrack, Repetier Server, Nextcloud...)</p>
-                    <div class="list-group" id="sources-list">
-                        <div class="text-center py-3">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Chargement...</span>
-                            </div>
-                        </div>
-                    </div>
-                    <button class="btn btn-success mt-3 w-100" data-bs-toggle="modal" data-bs-target="#modalSource">
-                        <i class="bi bi-plus-circle"></i> Ajouter une source
-                    </button>
-                </div>
-            </div>
-        </div>
-        
-    </div>
-    
-    <div class="row">
-        
+
         <!-- À propos -->
         <div class="col-md-6 mb-4">
             <div class="card">
@@ -95,53 +77,233 @@
                 </div>
             </div>
         </div>
-        
     </div>
-    
+
+    <div class="row">
+        <!-- Sources de données -->
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-database"></i> Sources de Données</h5>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-light" id="btn-refresh-sources" type="button">
+                            <i class="bi bi-arrow-clockwise"></i> Rafraîchir
+                        </button>
+                        <button class="btn btn-sm btn-warning" id="btn-add-source" type="button" data-bs-toggle="modal" data-bs-target="#modalSource">
+                            <i class="bi bi-plus-circle"></i> Nouvelle source
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-2">Configurez les intégrations externes utilisées par les widgets (Fabtrack, météo, calendriers, APIs HTTP).</p>
+                    <div class="alert alert-secondary py-2 mb-3" role="alert">
+                        <i class="bi bi-shield-lock"></i>
+                        Les credentials ne sont jamais renvoyés par l'API. En édition, laissez les champs secrets vides pour les conserver.
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Nom</th>
+                                    <th>Type</th>
+                                    <th>URL</th>
+                                    <th>État</th>
+                                    <th>Dernier test</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sources-table-body">
+                                <tr>
+                                    <td colspan="6" class="text-center py-4">
+                                        <div class="spinner-border text-primary" role="status"></div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gestion des missions -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-check2-square"></i> Missions (Kanban)</h5>
+                    <button class="btn btn-sm btn-dark" id="btn-add-mission" type="button">
+                        <i class="bi bi-plus-circle"></i> Nouvelle mission
+                    </button>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">Gérez les tâches affichées dans le widget Missions sur le dashboard.</p>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Titre</th>
+                                    <th>Statut</th>
+                                    <th>Priorité</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="missions-table-body">
+                                <tr>
+                                    <td colspan="4" class="text-center py-4">
+                                        <div class="spinner-border text-primary" role="status"></div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
-<!-- Modal : Ajouter une source -->
-<div class="modal fade" id="modalSource" tabindex="-1">
+<!-- Modal : Mission -->
+<div class="modal fade" id="modalMission" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Ajouter une Source de Données</h5>
+                <h5 class="modal-title" id="modal-mission-title">Nouvelle Mission</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="mission-id">
+                <div class="mb-3">
+                    <label for="mission-titre" class="form-label">Titre</label>
+                    <input type="text" class="form-control" id="mission-titre" required>
+                </div>
+                <div class="mb-3">
+                    <label for="mission-description" class="form-label">Description (optionnel)</label>
+                    <textarea class="form-control" id="mission-description" rows="2"></textarea>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="mission-statut" class="form-label">Statut</label>
+                        <select class="form-select" id="mission-statut">
+                            <option value="a_faire">À faire</option>
+                            <option value="en_cours">En cours</option>
+                            <option value="termine">Terminé</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="mission-priorite" class="form-label">Priorité</label>
+                        <select class="form-select" id="mission-priorite">
+                            <option value="0">Normale</option>
+                            <option value="1">Haute</option>
+                            <option value="2">Urgente</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-success" id="btn-save-mission">
+                    <i class="bi bi-check-circle"></i> Enregistrer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal : Ajouter / Éditer une source -->
+<div class="modal fade" id="modalSource" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-source-title">Nouvelle Source de Données</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="form-source">
-                    <div class="mb-3">
-                        <label for="source-nom" class="form-label">Nom</label>
-                        <input type="text" class="form-control" id="source-nom" required>
+                    <input type="hidden" id="source-id">
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="source-nom" class="form-label">Nom *</label>
+                            <input type="text" class="form-control" id="source-nom" required placeholder="Fabtrack prod">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="source-type" class="form-label">Type *</label>
+                            <select class="form-select" id="source-type" required>
+                                <option value="">Chargement...</option>
+                            </select>
+                        </div>
                     </div>
-                    
+
                     <div class="mb-3">
-                        <label for="source-type" class="form-label">Type</label>
-                        <select class="form-select" id="source-type" required>
-                            <option value="">Choisir...</option>
-                            <option value="fabtrack">Fabtrack</option>
-                            <option value="repetier">Repetier Server</option>
-                            <option value="nextcloud_caldav">Nextcloud CalDAV</option>
-                            <option value="prusalink">PrusaLink</option>
-                        </select>
+                        <label for="source-url" class="form-label">URL *</label>
+                        <input type="url" class="form-control" id="source-url" required placeholder="http://localhost:5555">
+                        <div id="source-type-help" class="form-text">Sélectionnez un type pour obtenir une URL suggérée.</div>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="source-url" class="form-label">URL</label>
-                        <input type="url" class="form-control" id="source-url" required>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label for="source-sync-interval" class="form-label">Intervalle sync (sec)</label>
+                            <input type="number" class="form-control" id="source-sync-interval" min="10" max="3600" value="60">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" id="source-actif" checked>
+                                <label class="form-check-label" for="source-actif">Source active</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end justify-content-md-end">
+                            <button class="btn btn-outline-primary d-none" type="button" id="btn-test-source-modal">
+                                <i class="bi bi-plug"></i> Tester connexion
+                            </button>
+                        </div>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="source-apikey" class="form-label">Clé API / Mot de passe</label>
-                        <input type="text" class="form-control" id="source-apikey">
-                        <div class="form-text">Laissez vide si non requis</div>
+
+                    <div class="accordion" id="source-credentials-accordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#source-credentials-panel">
+                                    Credentials (optionnel)
+                                </button>
+                            </h2>
+                            <div id="source-credentials-panel" class="accordion-collapse collapse" data-bs-parent="#source-credentials-accordion">
+                                <div class="accordion-body">
+                                    <p class="text-muted small">En mode édition: laissez les champs vides pour conserver les credentials existants.</p>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label for="source-username" class="form-label">Utilisateur</label>
+                                            <input type="text" class="form-control" id="source-username" autocomplete="off">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="source-password" class="form-label">Mot de passe</label>
+                                            <input type="password" class="form-control" id="source-password" autocomplete="new-password">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="source-apikey" class="form-label">API Key / Token</label>
+                                            <input type="text" class="form-control" id="source-apikey" autocomplete="off">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="source-city" class="form-label">Ville (OpenWeatherMap)</label>
+                                            <input type="text" class="form-control" id="source-city" placeholder="Nancy,FR">
+                                        </div>
+                                        <div class="col-12">
+                                            <label for="source-credentials-extra" class="form-label">JSON additionnel</label>
+                                            <textarea class="form-control" id="source-credentials-extra" rows="3" placeholder='{"header_name": "X-Api-Key"}'></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
                 <button type="button" class="btn btn-success" id="btn-save-source">
-                    <i class="bi bi-check-circle"></i> Ajouter
+                    <i class="bi bi-check-circle"></i> Enregistrer
                 </button>
             </div>
         </div>

@@ -194,10 +194,18 @@ async function apiCall(url, methodOrOptions = {}, data = null) {
         }
         
         const response = await fetch(url, options);
-        const result = await response.json();
+        
+        // Lire la réponse en texte d'abord pour éviter le crash JSON.parse sur du HTML
+        const text = await response.text();
+        let result;
+        try {
+            result = JSON.parse(text);
+        } catch (e) {
+            throw new Error(`Erreur serveur (HTTP ${response.status})`);
+        }
         
         if (!response.ok) {
-            throw new Error(result.error || 'Erreur inconnue');
+            throw new Error(result.error || `Erreur HTTP ${response.status}`);
         }
         
         return result;

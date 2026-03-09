@@ -28,10 +28,23 @@ body {
 .navbar-brand {
     font-weight: 700;
     font-size: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    overflow: hidden;
+}
+
+.navbar-logo {
+    width: 32px;
+    height: 32px;
+    max-width: 32px;
+    max-height: 32px;
+    object-fit: contain;
+    flex-shrink: 0;
 }
 
 .navbar {
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    overflow: hidden;
 }
 
 /* Badges d'urgence */
@@ -169,4 +182,29 @@ body.light-mode .table {
     .navbar-brand {
         font-size: 1.2rem;
     }
+
+    .navbar-logo {
+        width: 26px;
+        height: 26px;
+        max-width: 26px;
+        max-height: 26px;
+    }
+}
+
+/* Parametres - Sources */
+#sources-table-body code {
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+
+#sources-table-body .btn-group .btn {
+    min-width: 34px;
+}
+
+#sources-table-body tr td {
+    vertical-align: middle;
+}
+
+#source-type-help {
+    min-height: 1.25rem;
 }

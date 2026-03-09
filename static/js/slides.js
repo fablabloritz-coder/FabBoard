@@ -18,6 +18,103 @@ function safeEscape(str) {
     return div.innerHTML;
 }
 
+/**
+ * Upload une image via /api/upload et met à jour le champ caché correspondant.
+ */
+function uploadImageField(fileInput, configKey) {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/api/upload', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                const hidden = fileInput.closest('.mb-3').querySelector('[data-config-key="' + configKey + '"]');
+                if (hidden) hidden.value = result.url;
+                // Mettre à jour l'aperçu
+                let preview = fileInput.closest('.mb-3').querySelector('img');
+                if (!preview) {
+                    const div = document.createElement('div');
+                    div.className = 'mb-2';
+                    div.innerHTML = '<img style="max-width:100%;max-height:120px;border-radius:6px;border:1px solid #dee2e6;">';
+                    fileInput.closest('.mb-3').insertBefore(div, fileInput.closest('.mb-3').querySelector('label').nextSibling);
+                    preview = div.querySelector('img');
+                }
+                preview.src = result.url;
+                showToast('Image uploadée', 'success');
+            } else {
+                showToast(result.error || 'Erreur upload', 'error');
+            }
+        })
+        .catch(() => showToast('Erreur lors de l\'upload', 'error'));
+}
+
+/**
+ * Upload une vidéo via /api/upload-video et met à jour le champ caché correspondant.
+ */
+function uploadVideoField(fileInput, configKey) {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showToast('Upload en cours...', 'info');
+
+    fetch('/api/upload-video', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                const hidden = fileInput.closest('.mb-3').querySelector('[data-config-key="' + configKey + '"]');
+                if (hidden) hidden.value = result.url;
+                // Mettre à jour l'indication textuelle
+                const textInput = fileInput.closest('.mb-3').querySelector('input[type="text"]');
+                if (textInput) textInput.value = result.url;
+                showToast('Vidéo uploadée', 'success');
+            } else {
+                showToast(result.error || 'Erreur upload', 'error');
+            }
+        })
+        .catch(() => showToast('Erreur lors de l\'upload vidéo', 'error'));
+}
+
+/**
+ * Affiche/masque les options de fond selon le type sélectionné.
+ */
+function toggleFondOptions() {
+    const type = document.getElementById('slideFondType').value;
+    document.getElementById('fondCouleurGroup').style.display = type === 'couleur' ? '' : 'none';
+    document.getElementById('fondImageGroup').style.display = type === 'image' ? '' : 'none';
+}
+
+/**
+ * Upload d'image de fond de slide.
+ */
+function uploadSlideBg(fileInput) {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/api/upload', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                document.getElementById('slideFondImage').value = result.url;
+                document.getElementById('fondImagePreview').innerHTML =
+                    '<img src="' + escapeHtml(result.url) + '" style="max-width:100%;max-height:80px;border-radius:6px;">';
+                showToast('Image de fond uploadée', 'success');
+            } else {
+                showToast(result.error || 'Erreur upload', 'error');
+            }
+        })
+        .catch(() => showToast('Erreur lors de l\'upload', 'error'));
+}
+
 // ========== STATE ==========
 let currentSlides = [];
 let currentLayouts = [];
@@ -116,6 +213,7 @@ function setupEventListeners() {
         'btnAddSlide': openAddSlideModal,
         'btnSaveSlide': saveSlide,
         'btnDeleteSlide': deleteCurrentSlide,
+        'btnDeleteAllSlides': deleteAllSlides,
         'btnRefreshPreview': refreshPreview,
         'btnFullscreenPreview': openFullscreenPreview,
         'btnSaveWidgetConfig': saveWidgetConfig
@@ -497,6 +595,11 @@ function openAddSlideModal() {
     document.getElementById('slideName').value = '';
     document.getElementById('slideDuration').value = '30';
     document.getElementById('slideActive').checked = true;
+    document.getElementById('slideFondType').value = 'defaut';
+    document.getElementById('slideFondCouleur').value = '#0b1120';
+    document.getElementById('slideFondImage').value = '';
+    document.getElementById('fondImagePreview').innerHTML = '';
+    toggleFondOptions();
     
     renderLayoutSelector();
     
@@ -513,6 +616,19 @@ function editSlide(slideId) {
     document.getElementById('slideName').value = slide.nom;
     document.getElementById('slideDuration').value = slide.temps_affichage;
     document.getElementById('slideActive').checked = slide.actif === 1;
+
+    // Fond de slide
+    const fondType = slide.fond_type || 'defaut';
+    const fondValeur = slide.fond_valeur || '';
+    document.getElementById('slideFondType').value = fondType;
+    if (fondType === 'couleur') {
+        document.getElementById('slideFondCouleur').value = fondValeur || '#0b1120';
+    } else if (fondType === 'image') {
+        document.getElementById('slideFondImage').value = fondValeur;
+        const preview = document.getElementById('fondImagePreview');
+        preview.innerHTML = fondValeur ? '<img src="' + escapeHtml(fondValeur) + '" style="max-width:100%;max-height:80px;border-radius:6px;">' : '';
+    }
+    toggleFondOptions();
     
     renderLayoutSelector(slide.layout_id);
     
@@ -566,6 +682,15 @@ async function saveSlide() {
     const temps_affichage = parseInt(document.getElementById('slideDuration').value);
     const actif = document.getElementById('slideActive').checked ? 1 : 0;
     
+    // Fond
+    const fond_type = document.getElementById('slideFondType').value;
+    let fond_valeur = '';
+    if (fond_type === 'couleur') {
+        fond_valeur = document.getElementById('slideFondCouleur').value;
+    } else if (fond_type === 'image') {
+        fond_valeur = document.getElementById('slideFondImage').value;
+    }
+    
     // Récupérer le layout sélectionné
     const selectedLayout = document.querySelector('.layout-option.selected');
     if (!selectedLayout) {
@@ -581,12 +706,27 @@ async function saveSlide() {
     }
     
     try {
-        const data = { nom, layout_id, temps_affichage, actif };
+        const data = { nom, layout_id, temps_affichage, actif, fond_type, fond_valeur };
         let result;
         let newSlideId;
         
         if (slideId) {
-            // Modification
+            // Modification — si le layout change, nettoyer les widgets hors bornes
+            const slide = currentSlides.find(s => s.id == slideId);
+            if (slide && slide.layout_id !== layout_id) {
+                const newLayout = currentLayouts.find(l => l.id === layout_id);
+                if (newLayout) {
+                    const maxPositions = JSON.parse(newLayout.grille_json).length;
+                    const validWidgets = (slide.widgets || [])
+                        .filter(w => w.position < maxPositions)
+                        .map(w => ({
+                            widget_id: w.widget_id,
+                            position: w.position,
+                            config: JSON.parse(w.config_json || '{}')
+                        }));
+                    data.widgets = validWidgets;
+                }
+            }
             result = await apiCall(`/api/slides/${slideId}`, 'PUT', data);
             const index = currentSlides.findIndex(s => s.id == slideId);
             currentSlides[index] = result.data;
@@ -647,6 +787,44 @@ async function deleteCurrentSlide() {
             selectSlide(currentSlides[0].id);
         }
         
+    } catch (error) {
+        showToast('Erreur lors de la suppression', 'error');
+        console.error(error);
+    }
+}
+
+async function deleteAllSlides() {
+    if (currentSlides.length === 0) {
+        showToast('Aucune slide à supprimer', 'info');
+        return;
+    }
+
+    if (!confirm(`Voulez-vous vraiment supprimer les ${currentSlides.length} slide(s) ? Cette action est irréversible.`)) {
+        return;
+    }
+
+    try {
+        await apiCall('/api/slides/all', 'DELETE');
+
+        currentSlides = [];
+        selectedSlideId = null;
+
+        renderSlidesList();
+        document.getElementById('configContainer').innerHTML = `
+            <div class="config-placeholder">
+                <i class="bi bi-info-circle"></i>
+                <p>Toutes les slides ont été supprimées</p>
+            </div>
+        `;
+        document.getElementById('previewContainer').innerHTML = `
+            <div class="preview-placeholder">
+                <i class="bi bi-tv-fill"></i>
+                <p>Sélectionnez une slide</p>
+            </div>
+        `;
+        document.getElementById('btnDeleteSlide').style.display = 'none';
+
+        showToast('Toutes les slides ont été supprimées', 'success');
     } catch (error) {
         showToast('Erreur lors de la suppression', 'error');
         console.error(error);
@@ -758,6 +936,17 @@ async function saveWidgetConfig() {
 /**
  * Définitions des options de configuration par type de widget
  */
+const ECHELLE_FIELD = {
+    key: 'echelle', label: "Échelle d'affichage (TV)", type: 'select', options: [
+        { value: '1', label: '1× — Normal' },
+        { value: '1.25', label: '1.25× — Légèrement agrandi' },
+        { value: '1.5', label: '1.5× — Grand' },
+        { value: '2', label: '2× — Très grand' },
+        { value: '2.5', label: '2.5× — Extra grand' },
+        { value: '3', label: '3× — Maximum' }
+    ], default: '1'
+};
+
 const WIDGET_CONFIG_DEFINITIONS = {
     horloge: {
         titre: 'Horloge',
@@ -767,14 +956,15 @@ const WIDGET_CONFIG_DEFINITIONS = {
                 { value: '12h', label: '12 heures (AM/PM)' }
             ], default: '24h' },
             { key: 'afficher_secondes', label: 'Afficher les secondes', type: 'checkbox', default: true },
-            { key: 'afficher_date', label: 'Afficher la date', type: 'checkbox', default: true }
+            { key: 'afficher_date', label: 'Afficher la date', type: 'checkbox', default: true },
+            ECHELLE_FIELD
         ]
     },
     texte_libre: {
         titre: 'Texte libre',
         fields: [
             { key: 'titre', label: 'Titre', type: 'text', default: 'Information', placeholder: 'Titre du bloc' },
-            { key: 'texte', label: 'Contenu', type: 'textarea', default: '', placeholder: 'Texte à afficher...' },
+            { key: 'contenu', label: 'Contenu', type: 'textarea', default: '', placeholder: 'Texte à afficher...' },
             { key: 'taille_texte', label: 'Taille du texte', type: 'select', options: [
                 { value: 'small', label: 'Petit' },
                 { value: 'normal', label: 'Normal' },
@@ -785,72 +975,162 @@ const WIDGET_CONFIG_DEFINITIONS = {
                 { value: 'left', label: 'Gauche' },
                 { value: 'center', label: 'Centré' },
                 { value: 'right', label: 'Droite' }
-            ], default: 'left' }
+            ], default: 'left' },
+            ECHELLE_FIELD
         ]
     },
     compteurs: {
         titre: 'Compteurs Fabtrack',
         fields: [
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
             { key: 'afficher_en_attente', label: 'Afficher "À faire"', type: 'checkbox', default: true },
             { key: 'afficher_en_cours', label: 'Afficher "En cours"', type: 'checkbox', default: true },
-            { key: 'afficher_termines', label: 'Afficher "Terminées"', type: 'checkbox', default: true }
+            { key: 'afficher_termines', label: 'Afficher "Terminées"', type: 'checkbox', default: true },
+            ECHELLE_FIELD
         ]
     },
     activites: {
         titre: 'Activités Fabtrack',
         fields: [
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
             { key: 'nombre_max', label: "Nombre max d'activités", type: 'number', default: 5, min: 1, max: 20 },
             { key: 'filtre_urgence', label: 'Filtrer par urgence', type: 'select', options: [
                 { value: '', label: 'Toutes' },
                 { value: 'haute', label: 'Haute uniquement' },
                 { value: 'moyenne', label: 'Moyenne et +' },
                 { value: 'basse', label: 'Basse et +' }
-            ], default: '' }
+            ], default: '' },
+            ECHELLE_FIELD
         ]
     },
     calendrier: {
         titre: 'Événements calendrier',
         fields: [
-            { key: 'nombre_max', label: "Nombre max d'événements", type: 'number', default: 5, min: 1, max: 15 },
-            { key: 'jours_avance', label: "Jours à l'avance", type: 'number', default: 7, min: 1, max: 30 }
+            { key: 'source_id', label: 'Source CalDAV', type: 'source_select', source_type: 'nextcloud_caldav', default: '' },
+            { key: 'nombre_max', label: "Nombre max d'événements", type: 'number', default: 10, min: 1, max: 30 },
+            { key: 'jours_avance', label: "Jours à l'avance", type: 'number', default: 7, min: 1, max: 60 },
+            { key: 'taille_texte', label: 'Taille du texte', type: 'select', options: [
+                { value: 'small', label: 'Petit' },
+                { value: 'normal', label: 'Normal' },
+                { value: 'large', label: 'Grand' },
+                { value: 'xlarge', label: 'Très grand' }
+            ], default: 'normal' },
+            { key: 'taille_cartes', label: 'Taille des cartes', type: 'select', options: [
+                { value: 'compact', label: 'Compact' },
+                { value: 'normal', label: 'Normal' },
+                { value: 'large', label: 'Grand' },
+                { value: 'xlarge', label: 'Très grand' }
+            ], default: 'normal' },
+            { key: 'afficher_date_dessus', label: 'Afficher la date au-dessus', type: 'checkbox', default: true },
+            { key: 'code_couleur_urgence', label: 'Code couleur urgence', type: 'checkbox', default: true },
+            ECHELLE_FIELD
         ]
     },
     meteo: {
         titre: 'Météo',
         fields: [
-            { key: 'ville', label: 'Ville', type: 'text', default: '', placeholder: 'Ex: Nancy, FR' },
+            { key: 'source_id', label: 'Source OpenWeatherMap', type: 'source_select', source_type: 'openweathermap', default: '' },
+            { key: 'ville', label: 'Ville (override)', type: 'text', default: '', placeholder: 'Ex: Nancy, FR' },
             { key: 'unite', label: 'Unité', type: 'select', options: [
                 { value: 'celsius', label: 'Celsius (°C)' },
                 { value: 'fahrenheit', label: 'Fahrenheit (°F)' }
-            ], default: 'celsius' }
+            ], default: 'celsius' },
+            ECHELLE_FIELD
         ]
     },
     fabtrack_stats: {
         titre: 'Stats Fabtrack',
         fields: [
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
             { key: 'periode', label: 'Période', type: 'select', options: [
                 { value: 'jour', label: "Aujourd'hui" },
                 { value: 'semaine', label: 'Cette semaine' },
                 { value: 'mois', label: 'Ce mois' }
-            ], default: 'jour' }
+            ], default: 'jour' },
+            ECHELLE_FIELD
         ]
     },
     fabtrack_machines: {
         titre: 'État machines',
         fields: [
-            { key: 'afficher_inactives', label: 'Afficher les machines inactives', type: 'checkbox', default: false }
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
+            { key: 'afficher_inactives', label: 'Afficher les machines inactives', type: 'checkbox', default: false },
+            ECHELLE_FIELD
         ]
     },
     fabtrack_conso: {
         titre: 'Dernières consommations',
         fields: [
-            { key: 'nombre_max', label: 'Nombre max', type: 'number', default: 5, min: 1, max: 20 }
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
+            { key: 'nombre_max', label: 'Nombre max', type: 'number', default: 5, min: 1, max: 20 },
+            ECHELLE_FIELD
         ]
     },
     imprimantes: {
         titre: 'Imprimantes 3D',
         fields: [
-            { key: 'afficher_inactives', label: 'Afficher les imprimantes hors-ligne', type: 'checkbox', default: false }
+            { key: 'source_id', label: 'Source imprimantes', type: 'source_select', source_type: 'repetier', default: '' },
+            { key: 'afficher_inactives', label: 'Afficher les imprimantes hors-ligne', type: 'checkbox', default: false },
+            ECHELLE_FIELD
+        ]
+    },
+    image: {
+        titre: 'Image',
+        fields: [
+            { key: 'image_url', label: 'Image', type: 'image_upload', default: '' },
+            { key: 'titre_image', label: 'Titre (optionnel)', type: 'text', default: '', placeholder: 'Légende sous l\'image' },
+            { key: 'object_fit', label: 'Ajustement', type: 'select', options: [
+                { value: 'contain', label: 'Contenir (proportions gardées)' },
+                { value: 'cover', label: 'Couvrir (recadré)' },
+                { value: 'fill', label: 'Étirer' }
+            ], default: 'contain' }
+        ]
+    },
+    video: {
+        titre: 'Vidéo',
+        fields: [
+            { key: 'video_type', label: 'Type de source', type: 'select', options: [
+                { value: 'local', label: 'Vidéo locale (uploadée)' },
+                { value: 'youtube', label: 'YouTube (ID de la vidéo)' },
+                { value: 'dailymotion', label: 'Dailymotion (ID de la vidéo)' },
+                { value: 'url', label: 'URL directe (mp4, webm)' }
+            ], default: 'local' },
+            { key: 'video_src', label: 'Source vidéo', type: 'video_upload', default: '',
+              placeholder: 'Upload une vidéo ou saisissez l\'ID YouTube / Dailymotion' },
+            { key: 'autoplay', label: 'Lecture automatique', type: 'checkbox', default: true },
+            { key: 'boucle', label: 'Boucle', type: 'checkbox', default: true },
+            { key: 'muet', label: 'Muet (obligatoire pour autoplay)', type: 'checkbox', default: true }
+        ]
+    },
+    timer: {
+        titre: 'Timer',
+        fields: [
+            { key: 'titre', label: 'Titre', type: 'text', default: 'Compte à rebours', placeholder: 'Ex: Portes ouvertes' },
+            { key: 'date_cible', label: 'Date cible', type: 'date', default: '' },
+            { key: 'heure_cible', label: 'Heure cible', type: 'time', default: '00:00' },
+            { key: 'afficher_secondes', label: 'Afficher les secondes', type: 'checkbox', default: true },
+            ECHELLE_FIELD
+        ]
+    },
+    missions: {
+        titre: 'Missions',
+        fields: [
+            { key: 'nombre_max', label: 'Nombre max par colonne', type: 'number', default: 10, min: 1, max: 50 },
+            { key: 'afficher_a_faire', label: 'Afficher "À faire"', type: 'checkbox', default: true },
+            { key: 'afficher_en_cours', label: 'Afficher "En cours"', type: 'checkbox', default: true },
+            { key: 'afficher_termine', label: 'Afficher "Terminé"', type: 'checkbox', default: true },
+            ECHELLE_FIELD
+        ]
+    },
+    gif: {
+        titre: 'GIF',
+        fields: [
+            { key: 'gif_type', label: 'Source du GIF', type: 'select', options: [
+                { value: 'local', label: 'GIF local (uploadé)' },
+                { value: 'url', label: 'URL directe' }
+            ], default: 'local' },
+            { key: 'gif_url', label: 'GIF local', type: 'image_upload', default: '' },
+            { key: 'gif_direct_url', label: 'URL du GIF (.gif)', type: 'text', default: '', placeholder: 'https://media.tenor.com/.../tenor.gif' }
         ]
     }
 };
@@ -876,13 +1156,25 @@ function configureWidget(slideId, position) {
     // Charger la config existante
     let currentConfig = {};
     try { currentConfig = JSON.parse(widget.config_json || '{}'); } catch(e) {}
+
+    // Compatibilité : migrer l'ancienne config Tenor vers URL directe
+    if (widgetCode === 'gif') {
+        if (currentConfig.gif_type === 'tenor') {
+            currentConfig.gif_type = 'url';
+        }
+        if (!currentConfig.gif_direct_url && currentConfig.tenor_gif_url) {
+            currentConfig.gif_direct_url = currentConfig.tenor_gif_url;
+        }
+    }
     
     // Stocker le contexte d'édition
     currentEditingWidgetConfig = { slideId, position, widgetCode };
     
-    // Construire le formulaire
+    // Construire le formulaire (async pour source_select)
     const formEl = document.getElementById('widgetConfigForm');
-    formEl.innerHTML = buildWidgetConfigForm(configDef, currentConfig);
+    buildWidgetConfigFormAsync(configDef, currentConfig).then(html => {
+        formEl.innerHTML = html;
+    });
     
     // Mettre à jour le titre du modal
     const modalTitle = document.querySelector('#widgetConfigModal .modal-title');
@@ -893,60 +1185,145 @@ function configureWidget(slideId, position) {
     modal.show();
 }
 
+async function buildWidgetConfigFormAsync(configDef, currentConfig) {
+    // Pre-fetch sources for source_select fields
+    const sourceTypes = new Set();
+    configDef.fields.forEach(f => {
+        if (f.type === 'source_select' && f.source_type) {
+            sourceTypes.add(f.source_type);
+        }
+    });
+    
+    const sourcesCache = {};
+    for (const st of sourceTypes) {
+        try {
+            const resp = await apiCall('/api/sources/by-type/' + st);
+            sourcesCache[st] = resp.data || [];
+        } catch (e) {
+            sourcesCache[st] = [];
+        }
+    }
+    
+    return configDef.fields.map(field => {
+        const value = currentConfig[field.key] !== undefined ? currentConfig[field.key] : field.default;
+        return buildFieldHtml(field, value, sourcesCache);
+    }).join('');
+}
+
+function buildFieldHtml(field, value, sourcesCache) {
+    switch (field.type) {
+        case 'source_select': {
+            const sources = (sourcesCache || {})[field.source_type] || [];
+            let optionsHtml = '<option value="">Auto (par défaut)</option>';
+            sources.forEach(function(src) {
+                const sel = String(value) === String(src.id) ? ' selected' : '';
+                const status = src.derniere_erreur ? ' ⚠️' : (src.derniere_sync ? ' ✓' : '');
+                const activeLabel = src.actif ? '' : ' (inactive)';
+                optionsHtml += '<option value="' + src.id + '"' + sel + '>'
+                    + escapeHtml(src.nom) + activeLabel + status + '</option>';
+            });
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<select class="form-select" data-config-key="' + field.key + '">' +
+                optionsHtml +
+                '</select>' +
+                '<small class="form-text text-muted">Sélectionnez une source configurée dans Paramètres.</small>' +
+                '</div>';
+        }
+
+        case 'text':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<input type="text" class="form-control" data-config-key="' + field.key + '" ' +
+                'value="' + escapeHtml(String(value || '')) + '" ' +
+                'placeholder="' + escapeHtml(field.placeholder || '') + '">' +
+                '</div>';
+
+        case 'number':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<input type="number" class="form-control" data-config-key="' + field.key + '" ' +
+                'value="' + value + '" ' +
+                (field.min !== undefined ? 'min="' + field.min + '" ' : '') +
+                (field.max !== undefined ? 'max="' + field.max + '" ' : '') + '>' +
+                '</div>';
+
+        case 'textarea':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<textarea class="form-control" data-config-key="' + field.key + '" rows="4" ' +
+                'placeholder="' + escapeHtml(field.placeholder || '') + '">' +
+                escapeHtml(String(value || '')) + '</textarea>' +
+                '</div>';
+
+        case 'select':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<select class="form-select" data-config-key="' + field.key + '">' +
+                field.options.map(function(opt) {
+                    return '<option value="' + escapeHtml(opt.value) + '"' +
+                        (String(value) === String(opt.value) ? ' selected' : '') + '>' +
+                        escapeHtml(opt.label) + '</option>';
+                }).join('') +
+                '</select>' +
+                '</div>';
+
+        case 'checkbox':
+            return '<div class="mb-3">' +
+                '<div class="form-check form-switch">' +
+                '<input class="form-check-input" type="checkbox" data-config-key="' + field.key + '" ' +
+                (value ? 'checked' : '') + '>' +
+                '<label class="form-check-label">' + escapeHtml(field.label) + '</label>' +
+                '</div>' +
+                '</div>';
+
+        case 'image_upload':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                (value ? '<div class="mb-2"><img src="' + escapeHtml(value) + '" style="max-width:100%;max-height:120px;border-radius:6px;border:1px solid #dee2e6;"></div>' : '') +
+                '<input type="hidden" data-config-key="' + field.key + '" value="' + escapeHtml(String(value || '')) + '">' +
+                '<input type="file" class="form-control" accept="image/*" onchange="uploadImageField(this, \'' + field.key + '\')">' +
+                '<small class="form-text text-muted">JPG, PNG, GIF, WebP, SVG acceptés.</small>' +
+                '</div>';
+
+        case 'video_upload':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<input type="hidden" data-config-key="' + field.key + '" value="' + escapeHtml(String(value || '')) + '">' +
+                (value ? '<div class="mb-2"><small class="text-success"><i class="bi bi-check-circle"></i> ' + escapeHtml(value) + '</small></div>' : '') +
+                '<input type="file" class="form-control mb-2" accept="video/mp4,video/webm,video/ogg" onchange="uploadVideoField(this, \'' + field.key + '\')">' +
+                '<input type="text" class="form-control" placeholder="Ou saisissez l\'ID YouTube/Dailymotion ou une URL" ' +
+                'value="' + escapeHtml(String(value || '')) + '" ' +
+                'onchange="this.closest(\'.mb-3\').querySelector(\'[data-config-key=\\x22' + field.key + '\\x22]\').value = this.value">' +
+                '<small class="form-text text-muted">Upload MP4/WebM ou saisissez un ID (ex: dQw4w9WgXcQ pour YouTube).</small>' +
+                '</div>';
+
+        case 'date':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<input type="date" class="form-control" data-config-key="' + field.key + '" ' +
+                'value="' + escapeHtml(String(value || '')) + '">' +
+                '</div>';
+
+        case 'time':
+            return '<div class="mb-3">' +
+                '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
+                '<input type="time" class="form-control" data-config-key="' + field.key + '" ' +
+                'value="' + escapeHtml(String(value || '')) + '">' +
+                '</div>';
+
+        case 'hidden':
+            return '<input type="hidden" data-config-key="' + field.key + '" value="' + escapeHtml(String(value || '')) + '">';
+
+        default:
+            return '';
+    }
+}
+
 function buildWidgetConfigForm(configDef, currentConfig) {
     return configDef.fields.map(field => {
         const value = currentConfig[field.key] !== undefined ? currentConfig[field.key] : field.default;
-        
-        switch (field.type) {
-            case 'text':
-                return '<div class="mb-3">' +
-                    '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
-                    '<input type="text" class="form-control" data-config-key="' + field.key + '" ' +
-                    'value="' + escapeHtml(String(value || '')) + '" ' +
-                    'placeholder="' + escapeHtml(field.placeholder || '') + '">' +
-                    '</div>';
-            
-            case 'number':
-                return '<div class="mb-3">' +
-                    '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
-                    '<input type="number" class="form-control" data-config-key="' + field.key + '" ' +
-                    'value="' + value + '" ' +
-                    (field.min !== undefined ? 'min="' + field.min + '" ' : '') +
-                    (field.max !== undefined ? 'max="' + field.max + '" ' : '') + '>' +
-                    '</div>';
-            
-            case 'textarea':
-                return '<div class="mb-3">' +
-                    '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
-                    '<textarea class="form-control" data-config-key="' + field.key + '" rows="4" ' +
-                    'placeholder="' + escapeHtml(field.placeholder || '') + '">' +
-                    escapeHtml(String(value || '')) + '</textarea>' +
-                    '</div>';
-            
-            case 'select':
-                return '<div class="mb-3">' +
-                    '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
-                    '<select class="form-select" data-config-key="' + field.key + '">' +
-                    field.options.map(function(opt) {
-                        return '<option value="' + escapeHtml(opt.value) + '"' +
-                            (String(value) === String(opt.value) ? ' selected' : '') + '>' +
-                            escapeHtml(opt.label) + '</option>';
-                    }).join('') +
-                    '</select>' +
-                    '</div>';
-            
-            case 'checkbox':
-                return '<div class="mb-3">' +
-                    '<div class="form-check form-switch">' +
-                    '<input class="form-check-input" type="checkbox" data-config-key="' + field.key + '" ' +
-                    (value ? 'checked' : '') + '>' +
-                    '<label class="form-check-label">' + escapeHtml(field.label) + '</label>' +
-                    '</div>' +
-                    '</div>';
-            
-            default:
-                return '';
-        }
+        return buildFieldHtml(field, value, {});
     }).join('');
 }
 
@@ -972,6 +1349,9 @@ async function saveWidgetAdvancedConfig() {
             case 'number':
                 newConfig[field.key] = parseInt(input.value) || field.default;
                 break;
+            case 'source_select':
+                newConfig[field.key] = input.value ? parseInt(input.value) : null;
+                break;
             default:
                 newConfig[field.key] = input.value;
                 break;
@@ -979,6 +1359,27 @@ async function saveWidgetAdvancedConfig() {
     });
     
     try {
+        // Normaliser/résoudre les URLs GIF avant sauvegarde (ex: lien Tenor non direct)
+        if (widgetCode === 'gif' && newConfig.gif_type === 'url' && newConfig.gif_direct_url) {
+            const rawGifUrl = String(newConfig.gif_direct_url || '').trim();
+            if (rawGifUrl) {
+                newConfig.gif_direct_url = rawGifUrl;
+                try {
+                    const resolved = await apiCall('/api/gif/resolve?url=' + encodeURIComponent(rawGifUrl));
+                    if (resolved && resolved.success && resolved.url) {
+                        if (resolved.url !== rawGifUrl) {
+                            showToast('URL GIF convertie vers un lien direct', 'info');
+                        }
+                        newConfig.gif_direct_url = resolved.url;
+                    }
+                } catch (resolveError) {
+                    // On garde l'URL brute pour ne pas bloquer l'utilisateur.
+                    console.warn('Impossible de résoudre l\'URL GIF:', resolveError);
+                    showToast('URL GIF non vérifiée. Utilisez de préférence un lien direct .gif', 'warning');
+                }
+            }
+        }
+
         // Mettre à jour la config du widget dans la slide
         const slide = currentSlides.find(s => s.id === slideId);
         const widget = slide.widgets.find(w => w.position === position);
