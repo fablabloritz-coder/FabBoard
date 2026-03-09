@@ -8,6 +8,7 @@ let slides = [];
 let currentSlideIndex = 0;
 let slideTimer = null;
 let clockTimer = null;
+let serverTimeOffset = 0;  // ms: serverTime - clientTime
 
 // ========== SHARED DATA STORE ==========
 const FabBoardStore = {
@@ -147,7 +148,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function startClockTimer() {
     if (clockTimer) clearInterval(clockTimer);
+    syncServerTime();
     clockTimer = setInterval(updateClock, 1000);
+    // Re-synchroniser avec le serveur toutes les 5 minutes
+    setInterval(syncServerTime, 5 * 60 * 1000);
+}
+
+async function syncServerTime() {
+    try {
+        const before = Date.now();
+        const resp = await fetch('/api/server-time');
+        const after = Date.now();
+        const data = await resp.json();
+        const rtt = after - before;
+        // Estimer l'heure du serveur au moment de la réception
+        serverTimeOffset = data.timestamp * 1000 - (before + rtt / 2);
+    } catch (e) {
+        console.warn('Impossible de synchroniser l\'heure serveur:', e);
+    }
+}
+
+function getServerNow() {
+    return new Date(Date.now() + serverTimeOffset);
 }
 
 // ========== THÈME ==========
@@ -238,6 +260,10 @@ async function reloadSlidesAfterCycle() {
         showEmptyState();
         return false;
     }
+
+    // Re-collecter les sources depuis les nouvelles slides et rafraîchir le store
+    FabBoardStore.collectFromSlides(slides);
+    await FabBoardStore.fetchAll();
 
     if (previousSlideId) {
         const index = slides.findIndex((s) => s.id === previousSlideId);
@@ -446,11 +472,12 @@ function renderWidgetError(widgetData, errorMsg) {
 
 // ========== HORLOGE GLOBALE ==========
 function updateClock() {
+    const now = getServerNow();
+
     // Mettre à jour tous les widgets horloge présents sur la slide.
     const horloges = document.querySelectorAll('.widget-horloge-time, .horloge-heure');
     
     horloges.forEach(el => {
-        const now = new Date();
         const timeStr = now.toLocaleTimeString('fr-FR', { 
             hour: '2-digit', 
             minute: '2-digit', 
@@ -463,7 +490,6 @@ function updateClock() {
     const dates = document.querySelectorAll('.widget-horloge-date, .horloge-date');
     
     dates.forEach(el => {
-        const now = new Date();
         const dateStr = now.toLocaleDateString('fr-FR', {
             weekday: 'long',
             day: 'numeric',

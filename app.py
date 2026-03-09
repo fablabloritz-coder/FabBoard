@@ -464,6 +464,16 @@ def medias():
 
 
 # ============================================================
+# API — HEURE SERVEUR
+# ============================================================
+
+@app.route('/api/server-time')
+def api_server_time():
+    """Retourne le timestamp Unix du serveur (pour synchronisation horloge client)."""
+    import time
+    return jsonify(success=True, timestamp=time.time())
+
+# ============================================================
 # API — DASHBOARD
 # ============================================================
 

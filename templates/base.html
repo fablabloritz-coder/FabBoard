@@ -117,14 +117,29 @@
             }
         }
 
+        // ========== SYNC HORLOGE SERVEUR ==========
+        let _navbarTimeOffset = 0;
+        async function syncNavbarClock() {
+            try {
+                const before = Date.now();
+                const resp = await fetch('/api/server-time');
+                const after = Date.now();
+                const data = await resp.json();
+                const rtt = after - before;
+                _navbarTimeOffset = data.timestamp * 1000 - (before + rtt / 2);
+            } catch (e) { /* fallback: heure locale */ }
+        }
+
         function updateNavbarClock() {
-            const now = new Date();
+            const now = new Date(Date.now() + _navbarTimeOffset);
             const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
             const el = document.getElementById('navbar-clock');
             if (el) el.textContent = timeStr;
         }
+        syncNavbarClock();
         updateNavbarClock();
         setInterval(updateNavbarClock, 1000);
+        setInterval(syncNavbarClock, 5 * 60 * 1000);
         
         // ========== SYSTÈME DE THÈME CLAIR/SOMBRE ==========
         let currentTheme = 'dark';
