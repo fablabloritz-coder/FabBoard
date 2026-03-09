@@ -253,7 +253,8 @@ async function startSlideCycle() {
 }
 
 async function reloadSlidesAfterCycle() {
-    const previousSlideId = slides[currentSlideIndex]?.id;
+    var currentSlide = slides[currentSlideIndex];
+    var previousSlideId = currentSlide ? currentSlide.id : undefined;
     await loadSlides();
 
     if (slides.length === 0) {
