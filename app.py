@@ -1810,6 +1810,140 @@ def api_update_theme():
 
 
 # ============================================================
+# FABLAB SUITE — Manifest & Widgets (spec v1.0.0)
+# ============================================================
+
+APP_VERSION = "1.0.0"
+SUITE_SPEC_VERSION = "1.0.0"
+_app_started_at = datetime.now().isoformat()
+
+
+@app.route('/api/fabsuite/manifest')
+def fabsuite_manifest():
+    """Manifest FabLab Suite — décrit l'application, ses capacités et ses widgets."""
+    return jsonify({
+        "app": "fabboard",
+        "name": "FabBoard",
+        "version": APP_VERSION,
+        "suite_version": SUITE_SPEC_VERSION,
+        "status": "running",
+        "description": "Dashboard TV temps réel pour le FabLab",
+        "icon": "bi-tv",
+        "color": "#6f42c1",
+        "url": request.host_url.rstrip('/'),
+        "capabilities": ["display", "tasks"],
+        "widgets": [
+            {
+                "id": "active-slides",
+                "label": "Slides actifs",
+                "description": "Nombre de slides configurés sur le dashboard TV",
+                "endpoint": "/api/fabsuite/widget/active-slides",
+                "type": "counter",
+                "refresh_interval": 300
+            },
+            {
+                "id": "pending-tasks",
+                "label": "Missions en cours",
+                "description": "Tâches à faire et en cours sur le tableau des missions",
+                "endpoint": "/api/fabsuite/widget/pending-tasks",
+                "type": "counter",
+                "refresh_interval": 120
+            },
+            {
+                "id": "missions-board",
+                "label": "Tableau des missions",
+                "description": "Liste des missions par statut",
+                "endpoint": "/api/fabsuite/widget/missions-board",
+                "type": "table",
+                "refresh_interval": 120
+            }
+        ],
+        "started_at": _app_started_at
+    })
+
+
+@app.route('/api/fabsuite/health')
+def fabsuite_health():
+    """Health check rapide pour monitoring par FabHome."""
+    try:
+        db = get_db()
+        db.execute("SELECT 1")
+        db.close()
+        return jsonify({"status": "ok"})
+    except Exception:
+        return jsonify({"status": "error"}), 503
+
+
+@app.route('/api/fabsuite/widget/active-slides')
+def fabsuite_widget_active_slides():
+    """Widget counter : nombre de slides actifs."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT COUNT(*) as total FROM slides WHERE actif = 1").fetchone()
+        return jsonify({
+            "value": row['total'] if row else 0,
+            "label": "Slides actifs",
+            "unit": "slides"
+        })
+    finally:
+        db.close()
+
+
+@app.route('/api/fabsuite/widget/pending-tasks')
+def fabsuite_widget_pending_tasks():
+    """Widget counter : nombre de missions à faire ou en cours."""
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT COUNT(*) as total FROM missions WHERE statut IN ('a_faire', 'en_cours')"
+        ).fetchone()
+        return jsonify({
+            "value": row['total'] if row else 0,
+            "label": "Missions en cours",
+            "unit": "missions"
+        })
+    finally:
+        db.close()
+
+
+@app.route('/api/fabsuite/widget/missions-board')
+def fabsuite_widget_missions_board():
+    """Widget table : tableau des missions par statut."""
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT titre, statut, priorite FROM missions ORDER BY statut, priorite DESC, ordre"
+        ).fetchall()
+
+        statut_labels = {'a_faire': 'A faire', 'en_cours': 'En cours', 'termine': 'Termine'}
+        priorite_labels = {0: '', 1: 'Haute', 2: 'Urgente'}
+
+        return jsonify({
+            "headers": ["Mission", "Statut", "Priorite"],
+            "rows": [
+                [
+                    r['titre'],
+                    statut_labels.get(r['statut'], r['statut']),
+                    priorite_labels.get(r['priorite'], '')
+                ]
+                for r in rows
+            ]
+        })
+    finally:
+        db.close()
+
+
+# Support CORS pour les endpoints FabSuite (accès cross-origin depuis FabHome)
+@app.after_request
+def fabsuite_cors(response):
+    if request.path.startswith('/api/fabsuite/'):
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
@@ -1820,5 +1954,6 @@ def shutdown_sync_worker(exception=None):
 
 if __name__ == '__main__':
     print(f'[FabBoard] Démarrage sur http://localhost:{PORT}')
+    print(f'[FabBoard] FabLab Suite manifest v{SUITE_SPEC_VERSION}')
     debug_mode = os.environ.get('FLASK_DEBUG', '1').lower() in ('1', 'true', 'yes')
     app.run(host='0.0.0.0', port=PORT, debug=debug_mode)
