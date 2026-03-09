@@ -90,6 +90,13 @@
     <script>
         const fontFamilyMap = {
             inter: "'Inter', sans-serif",
+            roboto: "'Roboto', sans-serif",
+            poppins: "'Poppins', sans-serif",
+            montserrat: "'Montserrat', sans-serif",
+            opensans: "'Open Sans', sans-serif",
+            sourcesans: "'Source Sans 3', sans-serif",
+            orbitron: "'Orbitron', sans-serif",
+            rajdhani: "'Rajdhani', sans-serif",
             system: "system-ui, -apple-system, 'Segoe UI', sans-serif",
             serif: "Georgia, 'Times New Roman', serif",
             mono: "'Consolas', 'Courier New', monospace"
@@ -104,7 +111,7 @@
             try {
                 const response = await fetch('/api/parametres');
                 const params = await response.json();
-                applyFontFamilyKey((params && params.font_family) || 'inter');
+                applyFontFamilyKey((params && (params.police_dashboard || params.font_family)) || 'inter');
             } catch (error) {
                 console.error('Erreur chargement police:', error);
             }

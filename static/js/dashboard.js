@@ -177,8 +177,20 @@ async function loadThemeSettings() {
     // Charger les paramètres (police, etc.)
     try {
         const params = await fetch('/api/parametres').then(r => r.json());
-        const police = params.police_dashboard || 'inter';
-        document.body.classList.add('font-' + police);
+        const police = params.police_dashboard || params.font_family || 'inter';
+        const FONT_MAP = {
+            inter: "'Inter', sans-serif",
+            roboto: "'Roboto', sans-serif",
+            poppins: "'Poppins', sans-serif",
+            montserrat: "'Montserrat', sans-serif",
+            opensans: "'Open Sans', sans-serif",
+            sourcesans: "'Source Sans 3', sans-serif",
+            orbitron: "'Orbitron', sans-serif",
+            rajdhani: "'Rajdhani', sans-serif",
+        };
+        const fontValue = FONT_MAP[police] || FONT_MAP.inter;
+        document.documentElement.style.setProperty('--app-font-family', fontValue);
+        document.body.style.fontFamily = fontValue;
     } catch (e) { /* default Inter */ }
 }
 
