@@ -98,49 +98,26 @@
     const widgetId = '{{ widget_id }}';
     const heureEl = document.getElementById('horloge-heure-' + widgetId);
     const dateEl = document.getElementById('horloge-date-' + widgetId);
-    const root = heureEl ? heureEl.closest('.widget-horloge') : null;
     
-    if (!heureEl || !dateEl || !root) return;
+    if (!heureEl || !dateEl) return;
     
-    function updateHorloge() {
-        if (!root.isConnected) {
-            document.removeEventListener('fabboard:refresh', updateHorloge);
-            return;
-        }
-        
-        var now = (typeof window.getServerNow === 'function') ? window.getServerNow() : new Date();
-        
-        // Format heure : HH:MM:SS
-        const heure = now.toLocaleTimeString('fr-FR', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
-        
-        // Format date : Jour DD Mois YYYY
-        const options = { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-        };
-        const date = now.toLocaleDateString('fr-FR', options);
-        
-        heureEl.textContent = heure;
-        dateEl.textContent = date;
-    }
+    // Affichage initial seulement — la mise à jour est gérée
+    // globalement par updateClock() dans dashboard.js (heure serveur synchronisée).
+    // Ne PAS créer de setInterval ici pour éviter un conflit d'écriture.
+    var now = (typeof getServerNow === 'function') ? getServerNow() : new Date();
     
-    // Mise à jour immédiate
-    updateHorloge();
+    heureEl.textContent = now.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
     
-    // Mise à jour chaque seconde
-    const interval = setInterval(updateHorloge, 1000);
-    
-    // Cleanup
-    document.addEventListener('fabboard:refresh', updateHorloge);
-    root.addEventListener('DOMNodeRemoved', () => {
-        clearInterval(interval);
-    }, { once: true });
+    dateEl.textContent = now.toLocaleDateString('fr-FR', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
 })();
 </script>

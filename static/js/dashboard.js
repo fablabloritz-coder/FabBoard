@@ -149,6 +149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 function startClockTimer() {
     if (clockTimer) clearInterval(clockTimer);
     syncServerTime();
+    clockTimer = setInterval(updateClock, 1000);
     // Re-synchroniser avec le serveur toutes les 5 minutes
     setInterval(syncServerTime, 5 * 60 * 1000);
 }
@@ -170,7 +171,6 @@ async function syncServerTime() {
 function getServerNow() {
     return new Date(Date.now() + serverTimeOffset);
 }
-window.getServerNow = getServerNow;
 
 // ========== THÈME ==========
 async function loadThemeSettings() {
@@ -394,7 +394,8 @@ async function displayCurrentSlide() {
     }
     await Promise.all(renderPromises);
     
-
+    // Mettre à jour l'horloge immédiatement
+    updateClock();
 }
 
 function renderEmptyWidget(position) {
@@ -470,9 +471,35 @@ function renderWidgetError(widgetData, errorMsg) {
 // ========== RAFRAÎCHISSEMENT DES WIDGETS ==========
 // Le FabBoardStore gère le refresh périodique et dispatch 'fabboard:refresh'.
 
-// ========== HORLOGE ==========
-// L'horloge est gérée par le widget horloge lui-même (horloge.html)
-// via window.getServerNow() exposé ci-dessus.
+// ========== HORLOGE GLOBALE ==========
+function updateClock() {
+    const now = getServerNow();
+
+    // Mettre à jour tous les widgets horloge présents sur la slide.
+    const horloges = document.querySelectorAll('.widget-horloge-time, .horloge-heure');
+    
+    horloges.forEach(el => {
+        const timeStr = now.toLocaleTimeString('fr-FR', { 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit' 
+        });
+        el.textContent = timeStr;
+    });
+    
+    // Mettre à jour les dates
+    const dates = document.querySelectorAll('.widget-horloge-date, .horloge-date');
+    
+    dates.forEach(el => {
+        const dateStr = now.toLocaleDateString('fr-FR', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        });
+        el.textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+    });
+}
 
 // ========== HELPER : API CALL ==========
 async function apiCall(endpoint, options = {}) {
