@@ -108,7 +108,7 @@
             return;
         }
         
-        const now = new Date();
+        var now = (typeof window.getServerNow === 'function') ? window.getServerNow() : new Date();
         
         // Format heure : HH:MM:SS
         const heure = now.toLocaleTimeString('fr-FR', {
