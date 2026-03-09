@@ -81,6 +81,28 @@
     
     <!-- Horloge navbar -->
     <script>
+        const fontFamilyMap = {
+            inter: "'Inter', sans-serif",
+            system: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+            serif: "Georgia, 'Times New Roman', serif",
+            mono: "'Consolas', 'Courier New', monospace"
+        };
+
+        function applyFontFamilyKey(fontKey) {
+            const key = fontFamilyMap[fontKey] ? fontKey : 'inter';
+            document.documentElement.style.setProperty('--app-font-family', fontFamilyMap[key]);
+        }
+
+        async function loadDisplaySettings() {
+            try {
+                const response = await fetch('/api/parametres');
+                const params = await response.json();
+                applyFontFamilyKey((params && params.font_family) || 'inter');
+            } catch (error) {
+                console.error('Erreur chargement police:', error);
+            }
+        }
+
         function updateNavbarClock() {
             const now = new Date();
             const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -145,6 +167,7 @@
         
         // Initialiser
         document.addEventListener('DOMContentLoaded', () => {
+            loadDisplaySettings();
             loadTheme();
             
             const btnTheme = document.getElementById('btnToggleTheme');

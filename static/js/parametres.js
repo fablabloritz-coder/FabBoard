@@ -9,6 +9,18 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
 });
 
+const FONT_FAMILY_MAP = {
+    inter: "'Inter', sans-serif",
+    system: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+    serif: "Georgia, 'Times New Roman', serif",
+    mono: "'Consolas', 'Courier New', monospace"
+};
+
+function applyFontFamily(fontFamilyKey) {
+    const key = FONT_FAMILY_MAP[fontFamilyKey] ? fontFamilyKey : 'inter';
+    document.documentElement.style.setProperty('--app-font-family', FONT_FAMILY_MAP[key]);
+}
+
 /**
  * Configure les écouteurs d'événements
  */
@@ -33,6 +45,8 @@ async function loadParametres() {
         document.getElementById('param-fablab-name').value = params.fablab_name || "Loritz'Lab";
         document.getElementById('param-refresh').value = params.refresh_interval || 30;
         document.getElementById('param-theme').value = params.theme || 'dark';
+        document.getElementById('param-font-family').value = params.font_family || 'inter';
+        applyFontFamily(params.font_family || 'inter');
     } catch (error) {
         console.error('Erreur chargement paramètres:', error);
     }
@@ -45,7 +59,8 @@ async function saveParametres() {
     const params = {
         fablab_name: document.getElementById('param-fablab-name').value,
         refresh_interval: document.getElementById('param-refresh').value,
-        theme: document.getElementById('param-theme').value
+        theme: document.getElementById('param-theme').value,
+        font_family: document.getElementById('param-font-family').value
     };
     
     try {
@@ -61,8 +76,14 @@ async function saveParametres() {
             apiCall('/api/parametres/theme', {
                 method: 'PUT',
                 body: JSON.stringify({ valeur: params.theme })
+            }),
+            apiCall('/api/parametres/font_family', {
+                method: 'PUT',
+                body: JSON.stringify({ valeur: params.font_family })
             })
         ]);
+
+        applyFontFamily(params.font_family);
         
         showToast('Paramètres enregistrés avec succès', 'success');
     } catch (error) {

@@ -92,15 +92,10 @@ function showEmptyState() {
 // ========== CYCLE DES SLIDES ==========
 function startSlideCycle() {
     displayCurrentSlide();
-    
-    // Si une seule slide, pas besoin de cycle
-    if (slides.length === 1) {
-        startWidgetRefresh();
-        return;
-    }
-    
-    // Cycle automatique
-    const currentSlide = slides[currentSlideIndex];
+
+    // Cycle automatique (meme avec 1 seule slide pour prendre en compte les
+    // modifications apres un tour complet)
+    const currentSlide = slides[currentSlideIndex] || { temps_affichage: 30 };
     slideTimer = setTimeout(() => {
         nextSlide();
     }, currentSlide.temps_affichage * 1000);
@@ -108,12 +103,52 @@ function startSlideCycle() {
     startWidgetRefresh();
 }
 
-function nextSlide() {
+async function reloadSlidesAfterCycle() {
+    const previousSlideId = slides[currentSlideIndex]?.id;
+    await loadSlides();
+
+    if (slides.length === 0) {
+        showEmptyState();
+        return false;
+    }
+
+    if (previousSlideId) {
+        const index = slides.findIndex(s => s.id === previousSlideId);
+        currentSlideIndex = index >= 0 ? index : 0;
+    }
+
+    if (currentSlideIndex >= slides.length) {
+        currentSlideIndex = 0;
+    }
+
+    return true;
+}
+
+async function nextSlide() {
     // Arrêter les timers
     if (slideTimer) clearTimeout(slideTimer);
     if (widgetRefreshTimer) clearInterval(widgetRefreshTimer);
-    
-    // Passer à la slide suivante
+
+    if (slides.length === 0) {
+        showEmptyState();
+        return;
+    }
+
+    const isEndOfCycle = (currentSlideIndex + 1) >= slides.length;
+
+    // A la fin d'un cycle complet, recharger la configuration des slides
+    // pour appliquer les modifications sans recharger la page.
+    if (isEndOfCycle) {
+        try {
+            const ok = await reloadSlidesAfterCycle();
+            if (!ok) {
+                return;
+            }
+        } catch (error) {
+            console.error('Erreur rechargement des slides apres cycle:', error);
+        }
+    }
+
     currentSlideIndex = (currentSlideIndex + 1) % slides.length;
     
     // Transition
@@ -125,7 +160,7 @@ function nextSlide() {
         container.classList.remove('slide-transition');
         
         // Relancer le cycle
-        const currentSlide = slides[currentSlideIndex];
+        const currentSlide = slides[currentSlideIndex] || { temps_affichage: 30 };
         slideTimer = setTimeout(() => {
             nextSlide();
         }, currentSlide.temps_affichage * 1000);

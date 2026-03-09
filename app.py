@@ -28,17 +28,38 @@ _SECRET_KEY_PATH = os.path.join(DATA_DIR, 'secret_key.txt')
 
 
 def _load_or_generate_secret_key():
-    """Charge la clé secrète depuis le fichier, ou en génère une nouvelle."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    if os.path.exists(_SECRET_KEY_PATH):
-        with open(_SECRET_KEY_PATH, 'r', encoding='utf-8') as f:
-            key = f.read().strip()
-            if len(key) >= 32:
-                return key
+    """Charge la clé secrète depuis le fichier, ou en génère une nouvelle.
+
+    En environnement Docker, un volume monte sur /app/data peut etre en lecture seule
+    ou appartenir a un autre UID/GID. Dans ce cas, on degrade proprement vers une
+    cle en memoire pour eviter un crash au demarrage.
+    """
+    fallback_key = secrets.token_hex(32)
+
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+    except OSError as e:
+        print(f"[WARN] Impossible de creer {DATA_DIR}: {e}. Cle secrete non persistante.")
+        return fallback_key
+
+    try:
+        if os.path.exists(_SECRET_KEY_PATH):
+            with open(_SECRET_KEY_PATH, 'r', encoding='utf-8') as f:
+                key = f.read().strip()
+                if len(key) >= 32:
+                    return key
+    except OSError as e:
+        print(f"[WARN] Impossible de lire {_SECRET_KEY_PATH}: {e}. Nouvelle cle temporaire.")
+        return fallback_key
+
     key = secrets.token_hex(32)
-    with open(_SECRET_KEY_PATH, 'w', encoding='utf-8') as f:
-        f.write(key)
-    return key
+    try:
+        with open(_SECRET_KEY_PATH, 'w', encoding='utf-8') as f:
+            f.write(key)
+        return key
+    except OSError as e:
+        print(f"[WARN] Impossible d'ecrire {_SECRET_KEY_PATH}: {e}. Cle secrete non persistante.")
+        return fallback_key
 
 
 app.secret_key = os.environ.get('FLASK_SECRET_KEY') or _load_or_generate_secret_key()

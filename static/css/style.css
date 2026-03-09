@@ -6,6 +6,7 @@
     --success-color: #06d6a0;
     --warning-color: #f77f00;
     --danger-color: #ef476f;
+    --app-font-family: 'Inter', sans-serif;
     --dark-bg: #1a1a2e;
     --dark-card: #16213e;
     --dark-text: #eaeaea;
@@ -18,7 +19,7 @@
 }
 
 body {
-    font-family: 'Inter', sans-serif;
+    font-family: var(--app-font-family, 'Inter', sans-serif);
     background: #f8f9fa;
     color: #212529;
 }
