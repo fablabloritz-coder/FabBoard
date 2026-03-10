@@ -1481,15 +1481,19 @@ def api_create_mission():
 
     db = get_db()
     try:
+        date_echeance = data.get('date_echeance', None)
+        if date_echeance == '':
+            date_echeance = None
         c = db.execute(
-            '''INSERT INTO missions (titre, description, statut, priorite, ordre)
-               VALUES (?, ?, ?, ?, ?)''',
+            '''INSERT INTO missions (titre, description, statut, priorite, ordre, date_echeance)
+               VALUES (?, ?, ?, ?, ?, ?)''',
             (
                 data['titre'].strip(),
                 data.get('description', '').strip(),
                 data.get('statut', 'a_faire'),
                 int(data.get('priorite', 0)),
                 int(data.get('ordre', 0)),
+                date_echeance,
             )
         )
         db.commit()
@@ -1517,6 +1521,9 @@ def api_update_mission(mission_id):
         statut = data.get('statut', existing['statut'])
         priorite = int(data.get('priorite', existing['priorite']))
         ordre = int(data.get('ordre', existing['ordre']))
+        date_echeance = data.get('date_echeance', existing['date_echeance'])
+        if date_echeance == '':
+            date_echeance = None
 
         if statut not in ('a_faire', 'en_cours', 'termine'):
             return jsonify({'error': "Statut invalide"}), 400
@@ -1524,9 +1531,9 @@ def api_update_mission(mission_id):
         db.execute(
             '''UPDATE missions
                SET titre = ?, description = ?, statut = ?, priorite = ?, ordre = ?,
-                   updated_at = datetime('now','localtime')
+                   date_echeance = ?, updated_at = datetime('now','localtime')
                WHERE id = ?''',
-            (titre, description, statut, priorite, ordre, mission_id)
+            (titre, description, statut, priorite, ordre, date_echeance, mission_id)
         )
         db.commit()
         mission = db.execute('SELECT * FROM missions WHERE id = ?', (mission_id,)).fetchone()

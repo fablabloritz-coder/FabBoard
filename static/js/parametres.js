@@ -611,6 +611,7 @@ function openCreateMissionModal() {
     document.getElementById('mission-description').value = '';
     document.getElementById('mission-statut').value = 'a_faire';
     document.getElementById('mission-priorite').value = '0';
+    document.getElementById('mission-echeance').value = '';
     missionModal.show();
 }
 
@@ -623,6 +624,7 @@ function openEditMissionModal(id) {
     document.getElementById('mission-description').value = m.description || '';
     document.getElementById('mission-statut').value = m.statut;
     document.getElementById('mission-priorite').value = String(m.priorite);
+    document.getElementById('mission-echeance').value = m.date_echeance || '';
     missionModal.show();
 }
 
@@ -635,7 +637,8 @@ async function saveMission() {
         titre: titre,
         description: document.getElementById('mission-description').value.trim(),
         statut: document.getElementById('mission-statut').value,
-        priorite: parseInt(document.getElementById('mission-priorite').value)
+        priorite: parseInt(document.getElementById('mission-priorite').value),
+        date_echeance: document.getElementById('mission-echeance').value || null
     };
 
     try {

@@ -47,6 +47,36 @@
             return d.innerHTML;
         }
 
+        const prioriteBadges = {
+            1: '<span class="mission-prio-badge prio-haute">↑ Haute</span>',
+            2: '<span class="mission-prio-badge prio-urgente">‼ Urgente</span>'
+        };
+
+        const echeanceLabel = function(dateStr) {
+            if (!dateStr) return '';
+            try {
+                const d = new Date(dateStr);
+                const now = new Date();
+                now.setHours(0,0,0,0);
+                const diff = Math.round((d - now) / 86400000);
+                let cls = 'echeance-ok';
+                let txt = '';
+                if (diff < 0) {
+                    cls = 'echeance-late';
+                    txt = 'En retard (' + Math.abs(diff) + 'j)';
+                } else if (diff === 0) {
+                    cls = 'echeance-today';
+                    txt = "Aujourd'hui";
+                } else if (diff <= 3) {
+                    cls = 'echeance-soon';
+                    txt = 'Dans ' + diff + 'j';
+                } else {
+                    txt = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+                }
+                return '<span class="mission-echeance ' + cls + '">📅 ' + txt + '</span>';
+            } catch(e) { return ''; }
+        };
+
         function render(missions) {
             const cols = { a_faire: [], en_cours: [], termine: [] };
             (missions || []).forEach(function(m) {
@@ -60,9 +90,18 @@
                 const display = items.slice(0, maxItems);
                 body.innerHTML = display.map(function(m) {
                     const pClass = prioriteClasses[m.priorite] || '';
+                    const badge = prioriteBadges[m.priorite] || '';
+                    const desc = m.description
+                        ? '<div class="mission-desc">' + escTxt(m.description) + '</div>'
+                        : '';
+                    const ech = echeanceLabel(m.date_echeance);
                     return '<div class="mission-card ' + pClass + '">'
+                        + '<div class="mission-header">'
                         + '<div class="mission-titre">' + escTxt(m.titre) + '</div>'
-                        + (m.description ? '<div class="mission-desc">' + escTxt(m.description) + '</div>' : '')
+                        + badge
+                        + '</div>'
+                        + desc
+                        + (ech ? '<div class="mission-footer">' + ech + '</div>' : '')
                         + '</div>';
                 }).join('') || '<div class="missions-empty">—</div>';
             }

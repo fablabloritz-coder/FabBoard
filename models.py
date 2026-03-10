@@ -358,10 +358,17 @@ def migrate_db():
             statut TEXT NOT NULL DEFAULT 'a_faire',  -- 'a_faire', 'en_cours', 'termine'
             priorite INTEGER DEFAULT 0,              -- 0=normal, 1=haute, 2=urgente
             ordre INTEGER DEFAULT 0,
+            date_echeance TEXT DEFAULT NULL,         -- Date limite (YYYY-MM-DD), optionnelle
             created_at TEXT DEFAULT (datetime('now','localtime')),
             updated_at TEXT DEFAULT (datetime('now','localtime'))
         )
     ''')
+
+    # Migration : ajouter date_echeance si absent
+    cols_missions = [r[1] for r in c.execute("PRAGMA table_info(missions)").fetchall()]
+    if 'date_echeance' not in cols_missions:
+        c.execute("ALTER TABLE missions ADD COLUMN date_echeance TEXT DEFAULT NULL")
+        print('[FabBoard] Migration : colonne date_echeance ajoutée à missions')
 
     # Migration : ajouter le layout 'grid_3x1' s'il n'existe pas
     if c.execute("SELECT COUNT(*) FROM layouts WHERE code = 'grid_3x1'").fetchone()[0] == 0:

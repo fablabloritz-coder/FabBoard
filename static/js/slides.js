@@ -943,7 +943,8 @@ const ECHELLE_FIELD = {
         { value: '1.5', label: '1.5× — Grand' },
         { value: '2', label: '2× — Très grand' },
         { value: '2.5', label: '2.5× — Extra grand' },
-        { value: '3', label: '3× — Maximum' }
+        { value: '3', label: '3× — Très grand' },
+        { value: '4', label: '4× — Maximal' }
     ], default: '1'
 };
 

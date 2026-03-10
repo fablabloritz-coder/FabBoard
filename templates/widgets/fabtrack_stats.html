@@ -93,12 +93,23 @@
     }
 
     function render(stats, fabtrackError) {
-        if (fabtrackError || !stats.total_interventions) {
+        if (fabtrackError) {
             grid.innerHTML = `
                 <div style="text-align:center; padding:1.5rem; color:#64748b;">
                     <div style="font-size:2rem; margin-bottom:0.5rem;">📈</div>
                     <div>Fabtrack non connecté</div>
                     <small style="color:#475569;">Configurez l'URL dans Paramètres → Sources</small>
+                </div>
+            `;
+            return;
+        }
+
+        if (!stats.total_interventions) {
+            grid.innerHTML = `
+                <div style="text-align:center; padding:1.5rem; color:#64748b;">
+                    <div style="font-size:2rem; margin-bottom:0.5rem;">📈</div>
+                    <div style="color:#94a3b8;">Aucune activité enregistrée</div>
+                    <small style="color:#475569;">Les stats apparaîtront dès la première intervention</small>
                 </div>
             `;
             return;
