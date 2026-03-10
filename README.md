@@ -17,15 +17,16 @@
 
 FabBoard transforme n'importe quel écran TV en tableau de bord interactif pour votre Fablab. Il agrège les données de **Fabtrack** (consommations machines), de votre **calendrier Nextcloud/CalDAV**, de la **météo** (Open-Meteo), et affiche le tout dans un diaporama plein écran entièrement configurable.
 
-### Fait partie de la Fablab Suite
+### Fait partie de la FabLab Suite
 
 | Application | Description | Port |
 |---|---|---|
+| **[FabHome](https://github.com/fablabloritz-coder/FabHome)** | Hub central — portail et dashboard | 3001 |
 | **[PretGo](https://github.com/fablabloritz-coder/PretGo)** | Gestion de prêts de matériel | 5000 |
 | **[Fabtrack](https://github.com/fablabloritz-coder/Fabtrack)** | Suivi des consommations machines | 5555 |
 | **FabBoard** | Dashboard TV temps réel | 5580 |
 
-Les 3 applications sont **indépendantes** — chacune peut tourner seule avec son propre Docker. FabBoard se connecte en lecture seule à l'API de Fabtrack et aux sources CalDAV configurées.
+Les applications sont **indépendantes** — chacune peut tourner seule avec son propre Docker. FabBoard se connecte en lecture seule à l'API de Fabtrack et aux sources CalDAV configurées.
 
 ---
 
@@ -67,124 +68,40 @@ Les 3 applications sont **indépendantes** — chacune peut tourner seule avec s
 
 ---
 
-## 🚀 Installation
+## 🚀 Déploiement
 
-### Option A — Local Windows (développement / poste unique)
-
-#### Prérequis
-- **Python 3.10+** installé et dans le PATH
-- **pip** (inclus avec Python)
-
-#### Installation rapide
-
-```bash
-# Méthode 1 : Script batch (Windows)
-# Double-cliquez sur start.bat
-
-# Méthode 2 : Manuelle
-git clone https://github.com/fablabloritz-coder/FabBoard.git
-cd FabBoard
-python -m venv .venv
-
-# Windows :
-.venv\Scripts\activate
-# Linux / macOS :
-source .venv/bin/activate
-
-pip install -r requirements.txt
-python start.py
-```
-
-L'application est accessible sur **http://localhost:5580**.
-
-`start.bat` (Windows) : libère le port 5580 si occupé, installe l'environnement virtuel si nécessaire, lance le serveur Waitress et ouvre le navigateur.
-
----
-
-### Option B — Docker (recommandé pour serveur / production)
+### Option A — Docker (recommandé)
 
 #### Déploiement individuel (FabBoard seul)
 
+**Prérequis :** [Docker Desktop](https://docs.docker.com/get-docker/) (Windows/macOS) ou Docker Engine (Linux).
+
 ```bash
+git clone https://github.com/fablabloritz-coder/FabBoard.git
 cd FabBoard
+cp .env.example .env        # ajustez FABBOARD_PORT si besoin
 docker compose up -d --build
 ```
 
-- Application : `http://localhost:5580`
+- Application : `http://localhost:5580` (ou le port configuré dans `.env`)
 - Données persistées : `./docker-data/data` (SQLite)
 
-#### Déploiement complet (les 3 applications ensemble)
+#### Déploiement complet (toute la FabLab Suite)
 
-Pour déployer PretGo + Fabtrack + FabBoard sur un même serveur (ex : Ubuntu), un `docker-compose.yml` unifié orchestre les 3 conteneurs sur un réseau partagé :
+Un `docker-compose.yml` unifié est disponible à la racine du dépôt parent. Il orchestre FabHome, Fabtrack, PretGo et FabBoard en une seule commande :
 
 ```bash
-# Cloner les 3 dépôts dans un même dossier
+# Cloner tous les dépôts dans un même dossier
 mkdir ~/fablab && cd ~/fablab
+git clone https://github.com/fablabloritz-coder/FabHome.git
 git clone https://github.com/fablabloritz-coder/PretGo.git
 git clone https://github.com/fablabloritz-coder/Fabtrack.git
 git clone https://github.com/fablabloritz-coder/FabBoard.git
-```
 
-Créer le fichier `docker-compose.yml` à la racine `~/fablab/` :
+# Copier et configurer les variables
+cp .env.example .env   # ajustez les ports si besoin
 
-```yaml
-services:
-  pretgo:
-    build: { context: ./PretGo, dockerfile: Dockerfile }
-    container_name: pretgo
-    restart: unless-stopped
-    ports: ["5000:5000"]
-    environment:
-      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY_PRETGO:-change-me-pretgo}
-      TZ: Europe/Paris
-    volumes:
-      - pretgo-data:/app/data
-      - pretgo-uploads:/app/static/uploads/materiel
-    networks: [fablab-net]
-
-  fabtrack:
-    build: { context: ./Fabtrack, dockerfile: Dockerfile }
-    container_name: fabtrack
-    restart: unless-stopped
-    ports: ["5555:5555"]
-    environment:
-      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY_FABTRACK:-change-me-fabtrack}
-      TZ: Europe/Paris
-    volumes:
-      - fabtrack-data:/app/data
-      - fabtrack-uploads:/app/static/uploads
-    networks: [fablab-net]
-
-  fabboard:
-    build: { context: ./FabBoard, dockerfile: Dockerfile }
-    container_name: fabboard
-    restart: unless-stopped
-    ports: ["5580:5580"]
-    environment:
-      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY_FABBOARD:-change-me-fabboard}
-      TZ: Europe/Paris
-      FABTRACK_URL: http://fabtrack:5555  # Réseau Docker interne
-    volumes:
-      - fabboard-data:/app/data
-    depends_on: [fabtrack]
-    networks: [fablab-net]
-
-volumes:
-  pretgo-data:
-  pretgo-uploads:
-  fabtrack-data:
-  fabtrack-uploads:
-  fabboard-data:
-
-networks:
-  fablab-net:
-    driver: bridge
-```
-
-Lancer :
-
-```bash
-cd ~/fablab
+# Lancer toute la suite (ou une app : docker compose up -d --build fabboard)
 docker compose up -d --build
 ```
 
@@ -194,6 +111,7 @@ docker compose up -d --build
 
 | Application | URL |
 |---|---|
+| FabHome | `http://IP_SERVEUR:3001` |
 | PretGo | `http://IP_SERVEUR:5000` |
 | Fabtrack | `http://IP_SERVEUR:5555` |
 | FabBoard | `http://IP_SERVEUR:5580` |
@@ -202,7 +120,7 @@ Pour trouver l'IP du serveur : `hostname -I | awk '{print $1}'`
 
 #### Interconnexion FabBoard ↔ Fabtrack
 
-- En déploiement **unifié** (docker-compose ci-dessus) : FabBoard utilise `http://fabtrack:5555` automatiquement (réseau Docker interne).
+- En déploiement **unifié** (suite complète) : FabBoard utilise `http://host.docker.internal:5555` automatiquement.
 - En déploiement **individuel** : dans FabBoard → Paramètres → Sources, ajoutez une source Fabtrack avec `http://IP_SERVEUR:5555`.
 
 #### Variables d'environnement
@@ -356,6 +274,33 @@ docker volume inspect fablab_fabboard-data
 ```
 
 Chaque application propose aussi un export/import de sa base de données via son interface web.
+
+---
+
+### Option B — Windows (alternative, sans Docker)
+
+> Pour les environnements sans Docker. Python 3.10+ requis.
+
+```bash
+# Double-cliquez sur start.bat
+# — libère le port 5580 si occupé
+# — installe l'environnement virtuel si nécessaire
+# — lance le serveur et ouvre le navigateur
+```
+
+Ou manuellement :
+
+```bash
+git clone https://github.com/fablabloritz-coder/FabBoard.git
+cd FabBoard
+python -m venv .venv
+.venv\Scripts\activate      # Windows
+source .venv/bin/activate   # macOS/Linux
+pip install -r requirements.txt
+python start.py
+```
+
+L'application est accessible sur **http://localhost:5580**.
 
 ---
 
