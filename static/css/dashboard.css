@@ -964,7 +964,9 @@
     color: #94a3b8;
     margin-top: 0.2em;
     line-height: 1.3;
-    font-style: italic;
+}
+.mission-overdue {
+    box-shadow: 0 0 0 1px rgba(239,68,68,0.5);
 }
 .mission-footer {
     margin-top: 0.25em;

@@ -95,13 +95,14 @@
                         ? '<div class="mission-desc">' + escTxt(m.description) + '</div>'
                         : '';
                     const ech = echeanceLabel(m.date_echeance);
-                    return '<div class="mission-card ' + pClass + '">'
-                        + '<div class="mission-header">'
+                    const overdueClass = ech.includes('echeance-late') ? ' mission-overdue' : '';
+                    const footerItems = [];
+                    if (badge) footerItems.push(badge);
+                    if (ech) footerItems.push(ech);
+                    return '<div class="mission-card ' + pClass + overdueClass + '">'
                         + '<div class="mission-titre">' + escTxt(m.titre) + '</div>'
-                        + badge
-                        + '</div>'
                         + desc
-                        + (ech ? '<div class="mission-footer">' + ech + '</div>' : '')
+                        + (footerItems.length ? '<div class="mission-footer">' + footerItems.join('') + '</div>' : '')
                         + '</div>';
                 }).join('') || '<div class="missions-empty">—</div>';
             }
