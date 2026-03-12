@@ -145,18 +145,6 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_slides_actif ON slides(actif);
     CREATE INDEX IF NOT EXISTS idx_slide_widgets_slide ON slide_widgets(slide_id);
     CREATE INDEX IF NOT EXISTS idx_sources_cache_source ON sources_cache(source_id);
-
-    -- Table des missions (kanban)
-    CREATE TABLE IF NOT EXISTS missions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        titre TEXT NOT NULL,
-        description TEXT DEFAULT '',
-        statut TEXT NOT NULL DEFAULT 'a_faire',  -- 'a_faire', 'en_cours', 'termine'
-        priorite INTEGER DEFAULT 0,              -- 0=normal, 1=haute, 2=urgente
-        ordre INTEGER DEFAULT 0,
-        created_at TEXT DEFAULT (datetime('now','localtime')),
-        updated_at TEXT DEFAULT (datetime('now','localtime'))
-    );
     ''')
 
     # Insérer les paramètres par défaut si la table est vide
@@ -340,35 +328,6 @@ def migrate_db():
             ('timer', 'Timer', 'Compte à rebours vers une date/heure cible', '⏱️', 'general')
         )
         print('[FabBoard] Migration : widget timer ajouté')
-
-    # Migration : ajouter le widget 'missions' s'il n'existe pas
-    if c.execute("SELECT COUNT(*) FROM widgets_disponibles WHERE code = 'missions'").fetchone()[0] == 0:
-        c.execute(
-            "INSERT INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?, ?, ?, ?, ?)",
-            ('missions', 'Missions', 'Tableau kanban : à faire / en cours / terminé', '✅', 'general')
-        )
-        print('[FabBoard] Migration : widget missions ajouté')
-
-    # Migration : créer la table missions
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS missions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            titre TEXT NOT NULL,
-            description TEXT DEFAULT '',
-            statut TEXT NOT NULL DEFAULT 'a_faire',  -- 'a_faire', 'en_cours', 'termine'
-            priorite INTEGER DEFAULT 0,              -- 0=normal, 1=haute, 2=urgente
-            ordre INTEGER DEFAULT 0,
-            date_echeance TEXT DEFAULT NULL,         -- Date limite (YYYY-MM-DD), optionnelle
-            created_at TEXT DEFAULT (datetime('now','localtime')),
-            updated_at TEXT DEFAULT (datetime('now','localtime'))
-        )
-    ''')
-
-    # Migration : ajouter date_echeance si absent
-    cols_missions = [r[1] for r in c.execute("PRAGMA table_info(missions)").fetchall()]
-    if 'date_echeance' not in cols_missions:
-        c.execute("ALTER TABLE missions ADD COLUMN date_echeance TEXT DEFAULT NULL")
-        print('[FabBoard] Migration : colonne date_echeance ajoutée à missions')
 
     # Migration : ajouter le layout 'grid_3x1' s'il n'existe pas
     if c.execute("SELECT COUNT(*) FROM layouts WHERE code = 'grid_3x1'").fetchone()[0] == 0:

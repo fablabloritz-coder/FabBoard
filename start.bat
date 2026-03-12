@@ -54,7 +54,7 @@ echo       (Vous serrez redirige automatiquement)
 echo.
 
 REM Lancer l'app en arrière-plan
-start /min "" python run.py
+start /min "" python app.py
 timeout /t 3 /nobreak >nul
 
 REM ========== OUVRIR LE NAVIGATEUR ==========

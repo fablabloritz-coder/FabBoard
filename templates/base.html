@@ -32,7 +32,7 @@
     {% if page != 'dashboard' %}
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+            <a class="navbar-brand" href="{{ url_for('pages.dashboard') }}">
                 <img src="{{ url_for('static', filename='img/logo-fabboard.png') }}" alt="FabBoard" class="navbar-logo me-2" width="32" height="32">
                 <span>FabBoard</span>
             </a>
@@ -42,22 +42,22 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link {% if page == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                        <a class="nav-link {% if page == 'dashboard' %}active{% endif %}" href="{{ url_for('pages.dashboard') }}">
                             <i class="bi bi-tv"></i> Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if page == 'slides' %}active{% endif %}" href="{{ url_for('slides') }}">
+                        <a class="nav-link {% if page == 'slides' %}active{% endif %}" href="{{ url_for('pages.slides') }}">
                             <i class="bi bi-collection"></i> Slides
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if page == 'parametres' %}active{% endif %}" href="{{ url_for('parametres') }}">
+                        <a class="nav-link {% if page == 'parametres' %}active{% endif %}" href="{{ url_for('pages.parametres') }}">
                             <i class="bi bi-gear"></i> Paramètres
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if page == 'medias' %}active{% endif %}" href="{{ url_for('medias') }}">
+                        <a class="nav-link {% if page == 'medias' %}active{% endif %}" href="{{ url_for('pages.medias') }}">
                             <i class="bi bi-film"></i> Médias
                         </a>
                     </li>
