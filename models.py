@@ -242,6 +242,7 @@ def init_db():
             ('horloge', 'Horloge', 'Affiche l\'heure actuelle', '🕐', 'general'),
             ('calendrier', 'Événements calendrier', 'Prochains événements CalDAV', '📅', 'calendrier'),
             ('fabtrack_stats', 'Stats Fabtrack', 'Statistiques globales Fabtrack', '📈', 'fabtrack'),
+            ('fabtrack_conso', 'Consommations Fabtrack', 'Dernières consommations Fabtrack', '📉', 'fabtrack'),
             ('fabtrack_machines', 'État machines', 'État des machines Fabtrack', '🔧', 'fabtrack'),
             ('fabtrack_missions', 'Missions Fabtrack', 'Tableau missions depuis Fabtrack (lecture seule)', '✅', 'fabtrack'),
             ('imprimantes', 'Imprimantes 3D', 'État des imprimantes 3D', '🖨️', 'imprimantes'),
@@ -347,6 +348,41 @@ def migrate_db():
             ('gif', 'GIF', 'Affiche un GIF animé (Tenor ou local)', '🎞️', 'general')
         )
         print('[FabBoard] Migration : widget gif ajouté')
+
+    # Migration : ajouter le widget fabtrack_conso s'il n'existe pas
+    if c.execute("SELECT COUNT(*) FROM widgets_disponibles WHERE code = 'fabtrack_conso'").fetchone()[0] == 0:
+        c.execute(
+            "INSERT INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?, ?, ?, ?, ?)",
+            ('fabtrack_conso', 'Consommations Fabtrack', 'Dernières consommations Fabtrack', '📉', 'fabtrack')
+        )
+        print('[FabBoard] Migration : widget fabtrack_conso ajouté')
+
+    # Migration : remapper les anciens codes de widgets vers les codes canoniques.
+    legacy_map = {
+        'missions': ('fabtrack_missions', 'Missions Fabtrack', 'Tableau missions depuis Fabtrack (lecture seule)', '✅', 'fabtrack'),
+        'machines': ('fabtrack_machines', 'État machines', 'État des machines Fabtrack', '🔧', 'fabtrack'),
+        'fabtrack': ('fabtrack_stats', 'Stats Fabtrack', 'Statistiques globales Fabtrack', '📈', 'fabtrack'),
+        'graph_conso': ('fabtrack_conso', 'Consommations Fabtrack', 'Dernières consommations Fabtrack', '📉', 'fabtrack'),
+    }
+    for old_code, (new_code, new_nom, new_desc, new_icon, new_cat) in legacy_map.items():
+        old_row = c.execute('SELECT id FROM widgets_disponibles WHERE code = ?', (old_code,)).fetchone()
+        if not old_row:
+            continue
+
+        new_row = c.execute('SELECT id FROM widgets_disponibles WHERE code = ?', (new_code,)).fetchone()
+        if not new_row:
+            c.execute(
+                'INSERT INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?, ?, ?, ?, ?)',
+                (new_code, new_nom, new_desc, new_icon, new_cat)
+            )
+            new_id = c.lastrowid
+        else:
+            new_id = new_row['id']
+
+        old_id = old_row['id']
+        c.execute('UPDATE slide_widgets SET widget_id = ? WHERE widget_id = ?', (new_id, old_id))
+        c.execute('DELETE FROM widgets_disponibles WHERE id = ?', (old_id,))
+        print(f'[FabBoard] Migration : widget legacy "{old_code}" remappé vers "{new_code}"')
 
     conn.commit()
     conn.close()
@@ -501,6 +537,91 @@ def update_theme(mode=None, couleur_primaire=None, couleur_secondaire=None, tran
         conn.commit()
     
     conn.close()
+
+
+# ============================================================
+# DONNÉES DE DÉMONSTRATION
+# ============================================================
+
+def generate_demo_slides():
+    """Génère des slides de test 1×1 pour chaque widget avec intervalle de 5 secondes."""
+    conn = get_db(); c = conn.cursor()
+    
+    # D'abord, insérer quelques widgets disponibles de démonstration si pas déjà présents
+    demo_widgets = [
+        ('horloge', 'Horloge', 'Affiche l\'heure actuelle', '🕐', 'general'),
+        ('compteurs', 'Compteurs', 'Compteurs statistiques', '📊', 'general'),
+        ('activites', 'Activités récentes', 'Liste des dernières activités', '📝', 'fabtrack'),
+        ('fabtrack_stats', 'Stats Fabtrack', 'Données et graphiques Fabtrack', '⚡', 'fabtrack'),
+        ('fabtrack_machines', 'État machines', 'Statut des machines Fabtrack', '🔧', 'fabtrack'),
+        ('fabtrack_missions', 'Missions Fabtrack', 'Tableau des missions Fabtrack', '✅', 'fabtrack'),
+        ('calendrier', 'Événements', 'Prochains événements du calendrier', '📅', 'calendrier'),
+        ('meteo', 'Météo', 'Prévisions météorologiques', '⛅', 'general'),
+        ('fabtrack_conso', 'Graphique consommations', 'Évolution des consommations', '📈', 'fabtrack'),
+        ('imprimantes', 'État imprimantes', 'Statut imprimantes 3D connectées', '🖨️', 'imprimantes'),
+    ]
+    
+    for code, nom, description, icone, categorie in demo_widgets:
+        c.execute('INSERT OR IGNORE INTO widgets_disponibles (code, nom, description, icone, categorie) VALUES (?,?,?,?,?)',
+                  (code, nom, description, icone, categorie))
+    
+    # Récupérer l'ID du layout 1×1 (small)
+    layout_result = c.execute('SELECT id FROM layouts WHERE code = ?', ('small',)).fetchone()
+    if not layout_result:
+        print('[FabBoard] Erreur: Layout 1×1 (small) non trouvé!')
+        conn.close()
+        return
+    
+    layout_id = layout_result[0]
+    
+    # Récupérer tous les widgets disponibles
+    widgets = c.execute('SELECT id, code, nom FROM widgets_disponibles ORDER BY categorie, nom').fetchall()
+    
+    # Créer une slide par widget avec intervalle de 5 secondes
+    ordre = 1
+    for widget_id, widget_code, widget_nom in widgets:
+        slide_nom = f"Demo {widget_nom}"
+        
+        # Insérer le slide
+        c.execute('''INSERT OR IGNORE INTO slides 
+                   (nom, layout_id, ordre, temps_affichage, actif) 
+                   VALUES (?,?,?,?,?)''',
+                  (slide_nom, layout_id, ordre, 5, 1))  # 5 secondes d'intervalle
+        
+        # Récupérer l'ID du slide créé
+        slide_id = c.lastrowid or c.execute('SELECT id FROM slides WHERE nom = ?', (slide_nom,)).fetchone()[0]
+        
+        # Ajouter le widget au slide (position 0 car layout 1×1)
+        config_json = '{}'  # Configuration par défaut
+        if widget_code == 'fabtrack_stats':
+            config_json = '{"show_machines": true, "show_stats": true}'
+        elif widget_code == 'fabtrack_conso':
+            config_json = '{"max_items": 6}'
+        elif widget_code == 'fabtrack_missions':
+            config_json = '{"max_items": 6, "show_priorities": true}'
+        elif widget_code == 'calendrier':
+            config_json = '{"max_events": 5, "show_today": true}'
+        
+        c.execute('''INSERT OR IGNORE INTO slide_widgets 
+                   (slide_id, widget_id, position, config_json) 
+                   VALUES (?,?,?,?)''',
+                  (slide_id, widget_id, 0, config_json))
+        
+        ordre += 1
+    
+    # Ajouter une source Fabtrack de démonstration si pas présente
+    c.execute('SELECT COUNT(*) FROM sources WHERE type = ?', ('fabtrack',))
+    if c.fetchone()[0] == 0:
+        c.execute('''INSERT OR IGNORE INTO sources 
+                   (nom, type, url, credentials_json, sync_interval_sec, actif) 
+                   VALUES (?,?,?,?,?,?)''',
+                  ('Fabtrack Local', 'fabtrack', 'http://localhost:5555', '{}', 30, 1))
+        print('[FabBoard] Source Fabtrack locale ajoutée: http://localhost:5555')
+    
+    conn.commit()
+    conn.close()
+    
+    print(f'[FabBoard] {len(widgets)} slides de démonstration créées (5s d\'intervalle)')
 
 
 if __name__ == '__main__':

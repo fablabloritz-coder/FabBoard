@@ -200,6 +200,37 @@ def delete_all_slides():
         db.close()
 
 
+@bp.route('/api/slides/demo/generate', methods=['POST'])
+def generate_demo_slides():
+    """Génère des slides de démonstration complètes."""
+    try:
+        from models import generate_demo_slides
+        generate_demo_slides()
+        
+        # Compter les slides créées
+        db = get_db()
+        nb_slides = db.execute('SELECT COUNT(*) as count FROM slides WHERE actif = 1').fetchone()['count']
+        nb_widgets = db.execute('SELECT COUNT(*) as count FROM widgets_disponibles').fetchone()['count']
+        db.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Slides de démonstration générées avec succès',
+            'details': {
+                'slides_actives': f'{nb_slides} slides de test créées',
+                'widgets_disponibles': f'{nb_widgets} widgets configurés',
+                'intervalle': '5 secondes entre chaque slide',
+                'layout': 'Format 1×1 (plein écran)',
+                'source_fabtrack': 'Ajoutée automatiquement (http://localhost:5555)'
+            }
+        })
+        
+    except Exception as e:
+        import logging
+        logging.error(f"Erreur génération slides démo: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/api/layouts', methods=['GET'])
 def get_layouts():
     """Liste tous les layouts disponibles."""
@@ -215,7 +246,26 @@ def get_widgets():
     """Liste tous les widgets disponibles."""
     try:
         widgets = get_all_widgets_disponibles()
-        return jsonify({'success': True, 'data': widgets})
+
+        # Compatibilité legacy: normaliser les anciens codes pour éviter les doublons UI.
+        alias_map = {
+            'missions': 'fabtrack_missions',
+            'machines': 'fabtrack_machines',
+            'fabtrack': 'fabtrack_stats',
+            'graph_conso': 'fabtrack_conso',
+        }
+
+        normalized = []
+        seen_codes = set()
+        for widget in widgets:
+            item = dict(widget)
+            item['code'] = alias_map.get(item.get('code'), item.get('code'))
+            if item['code'] in seen_codes:
+                continue
+            seen_codes.add(item['code'])
+            normalized.append(item)
+
+        return jsonify({'success': True, 'data': normalized})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -224,23 +274,31 @@ def get_widgets():
 def render_widget(code):
     """Rend le template HTML d'un widget avec sa configuration."""
     try:
+        alias_map = {
+            'missions': 'fabtrack_missions',
+            'machines': 'fabtrack_machines',
+            'fabtrack': 'fabtrack_stats',
+            'graph_conso': 'fabtrack_conso',
+        }
+        canonical_code = alias_map.get(code, code)
+
         data = request.get_json() or {}
         config = data.get('config', {})
         source_id = data.get('source_id')
-        widget_id = str(data.get('widget_id') or f"{code}-{int(datetime.now().timestamp() * 1000)}")
+        widget_id = str(data.get('widget_id') or f"{canonical_code}-{int(datetime.now().timestamp() * 1000)}")
 
         db = get_db()
         try:
             widget = db.execute(
                 'SELECT * FROM widgets_disponibles WHERE code = ?',
-                (code,)
+                (canonical_code,)
             ).fetchone()
 
             if not widget:
-                return jsonify({'error': f'Widget {code} non trouvé'}), 404
+                return jsonify({'error': f'Widget {canonical_code} non trouvé'}), 404
 
             html = render_template(
-                f'widgets/{code}.html',
+                f'widgets/{canonical_code}.html',
                 config=config,
                 source_id=source_id,
                 widget_id=widget_id,

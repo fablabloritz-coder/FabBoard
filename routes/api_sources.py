@@ -65,6 +65,7 @@ def _extract_fabtrack_payload(base_url):
     ok_summary, summary, err_summary = _request_json(base_url, '/api/stats/summary')
     ok_conso, conso, err_conso = _request_json(base_url, '/api/consommations?per_page=5&page=1')
     ok_ref, reference, _ = _request_json(base_url, '/api/reference')
+    ok_missions, missions_payload, _ = _request_json(base_url, '/missions/api/list')
 
     if not ok_summary and not ok_conso:
         return None, f"Fabtrack indisponible: {err_summary or err_conso}"
@@ -90,11 +91,16 @@ def _extract_fabtrack_payload(base_url):
         'papier_feuilles': summary.get('total_papier_feuilles', 0),
     }
 
+    missions = []
+    if ok_missions and isinstance(missions_payload, dict):
+        missions = missions_payload.get('data', []) or []
+
     return {
         'compteurs': compteurs,
         'fabtrack_stats': summary,
         'activites': conso.get('data', []),
         'machines': machines,
+        'missions': missions,
         'source_url': base_url,
     }, ''
 

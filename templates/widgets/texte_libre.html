@@ -8,6 +8,7 @@
 
 <style>
 .widget-texte-libre {
+    --text-scale: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -20,14 +21,18 @@
 }
 
 .texte-container {
-    text-align: center;
+    text-align: left;
     color: #e2e8f0;
     z-index: 1;
     max-width: 90%;
 }
 
 .texte-titre {
-    font-size: {{ config.taille_titre | default('clamp(20px, 3.5vw, 40px)', true) }};
+    font-size: clamp(
+        calc(20px * var(--ws, 1) * var(--text-scale, 1)),
+        calc(3.5vw * var(--ws, 1) * var(--text-scale, 1)),
+        calc(48px * var(--ws, 1) * var(--text-scale, 1))
+    );
     font-weight: 700;
     margin: 0 0 16px 0;
     line-height: 1.2;
@@ -35,18 +40,39 @@
 }
 
 .texte-contenu {
-    font-size: {{ config.taille_contenu | default('clamp(14px, 2vw, 26px)', true) }};
+    font-size: clamp(
+        calc(14px * var(--ws, 1) * var(--text-scale, 1)),
+        calc(2vw * var(--ws, 1) * var(--text-scale, 1)),
+        calc(28px * var(--ws, 1) * var(--text-scale, 1))
+    );
     font-weight: 400;
     line-height: 1.5;
     color: #94a3b8;
     white-space: pre-wrap;
 }
+
+.widget-texte-libre.text-size-small { --text-scale: 0.82; }
+.widget-texte-libre.text-size-normal { --text-scale: 1; }
+.widget-texte-libre.text-size-large { --text-scale: 1.25; }
+.widget-texte-libre.text-size-xlarge { --text-scale: 1.6; }
+
+.widget-texte-libre.text-align-left .texte-container { text-align: left; }
+.widget-texte-libre.text-align-center .texte-container { text-align: center; }
+.widget-texte-libre.text-align-right .texte-container { text-align: right; }
 </style>
 
 <script>
 (function() {
     const widgetId = '{{ widget_id }}';
     const config = {{ config | tojson | safe }};
+    const root = document.getElementById('widget-texte-' + widgetId);
+
+    if (root) {
+        const textSize = config.taille_texte || 'normal';
+        const align = config.alignement || 'left';
+        root.classList.add('text-size-' + textSize);
+        root.classList.add('text-align-' + align);
+    }
     
     // Si emoji configuré, l'ajouter au titre
     if (config.emoji) {

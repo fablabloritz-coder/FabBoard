@@ -74,6 +74,7 @@ def dashboard_data():
                         'summary': payload.get('fabtrack_stats', {}),
                         'consommations': payload.get('activites', []),
                         'machines': payload.get('machines', []),
+                        'missions': payload.get('missions', []),
                     }
                 else:
                     fabtrack_error = err
@@ -86,6 +87,7 @@ def dashboard_data():
                     'summary': payload.get('fabtrack_stats', {}),
                     'consommations': payload.get('activites', []),
                     'machines': payload.get('machines', []),
+                    'missions': payload.get('missions', []),
                 }
             else:
                 fabtrack_error = err
@@ -93,6 +95,7 @@ def dashboard_data():
         summary = (fabtrack_data or {}).get('summary', {})
         activites = (fabtrack_data or {}).get('consommations', [])
         machines = (fabtrack_data or {}).get('machines', [])
+        missions = (fabtrack_data or {}).get('missions', [])
         compteurs = {
             'interventions_total': summary.get('total_interventions', 0),
             'impression_3d_grammes': summary.get('total_3d_grammes', 0),
@@ -143,6 +146,7 @@ def dashboard_data():
             'fabtrack_stats': summary,
             'imprimantes': imprimantes,
             'machines': machines,
+            'missions': missions,
             'fabtrack_url': fabtrack_url,
             'fabtrack_error': fabtrack_error,
             'timestamp': datetime.now().isoformat(),

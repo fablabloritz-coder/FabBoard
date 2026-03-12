@@ -539,3 +539,74 @@ function setButtonBusy(button, isBusy) {
         button.innerHTML = button.dataset.originalHtml;
     }
 }
+
+// ================================
+// DONNÉES DE DÉMONSTRATION
+// ================================
+
+async function generateDemoSlides() {
+    const btn = document.querySelector('button[onclick="generateDemoSlides()"]');
+    const resultDiv = document.getElementById('demoSlidesResult');
+    
+    // Désactiver le bouton et afficher un spinner
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Génération en cours...';
+    
+    resultDiv.style.display = 'none';
+    
+    try {
+        const result = await apiCall('/api/slides/demo/generate', {
+            method: 'POST'
+        });
+        
+        if (result.success) {
+            // Affichage du succès
+            resultDiv.innerHTML = `
+                <div class="alert alert-success small">
+                    <i class="bi bi-check-circle me-2"></i>
+                    <strong>${result.message}</strong>
+                    <ul class="mt-2 mb-0">
+                        <li>${result.details.slides_actives}</li>
+                        <li>${result.details.widgets_disponibles}</li>
+                        <li>Intervalle: ${result.details.intervalle}</li>
+                        <li>Layout: ${result.details.layout}</li>
+                        <li>Source: ${result.details.source_fabtrack}</li>
+                    </ul>
+                </div>
+            `;
+            
+            showToast('✅ Slides de démonstration générées!', 'success');
+            
+            // Proposer d'aller voir le dashboard
+            setTimeout(() => {
+                if (confirm('Souhaitez-vous voir les slides en action sur le dashboard TV ?')) {
+                    window.open('/', '_blank');
+                }
+            }, 2000);
+        } else {
+            // Affichage de l'erreur
+            resultDiv.innerHTML = `
+                <div class="alert alert-danger small">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Erreur :</strong> ${result.error}
+                </div>
+            `;
+            showToast('❌ Erreur génération slides', 'error');
+        }
+    } catch (error) {
+        console.error('Erreur génération slides démo:', error);
+        resultDiv.innerHTML = `
+            <div class="alert alert-danger small">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Erreur de connexion :</strong><br>
+                ${error.message || 'Impossible de contacter le serveur'}
+            </div>
+        `;
+        showToast('❌ Erreur de connexion', 'error');
+    } finally {
+        // Réactiver le bouton
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-play-fill me-1"></i> Générer slides de test';
+        resultDiv.style.display = 'block';
+    }
+}

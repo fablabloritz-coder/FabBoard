@@ -82,6 +82,44 @@ function uploadVideoField(fileInput, configKey) {
 }
 
 /**
+ * Sélectionne un média déjà uploadé et met à jour les champs de config.
+ */
+function selectExistingMedia(selectEl, configKey, mediaType) {
+    const selectedUrl = selectEl.value || '';
+    if (!selectedUrl) return;
+
+    const container = selectEl.closest('.mb-3');
+    if (!container) return;
+
+    const hidden = container.querySelector('[data-config-key="' + configKey + '"]');
+    if (hidden) hidden.value = selectedUrl;
+
+    if (mediaType === 'image') {
+        let preview = container.querySelector('img');
+        if (!preview) {
+            const div = document.createElement('div');
+            div.className = 'mb-2';
+            div.innerHTML = '<img style="max-width:100%;max-height:120px;border-radius:6px;border:1px solid #dee2e6;">';
+            const firstInput = container.querySelector('input[type="hidden"]');
+            if (firstInput) {
+                container.insertBefore(div, firstInput.nextSibling);
+            } else {
+                container.appendChild(div);
+            }
+            preview = div.querySelector('img');
+        }
+        preview.src = selectedUrl;
+    }
+
+    if (mediaType === 'video') {
+        const textInput = container.querySelector('input[type="text"]');
+        if (textInput) textInput.value = selectedUrl;
+    }
+
+    showToast('Média sélectionné', 'success');
+}
+
+/**
  * Affiche/masque les options de fond selon le type sélectionné.
  */
 function toggleFondOptions() {
@@ -1051,6 +1089,14 @@ const WIDGET_CONFIG_DEFINITIONS = {
             ECHELLE_FIELD
         ]
     },
+    fabtrack_conso: {
+        titre: 'Consommations Fabtrack',
+        fields: [
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
+            { key: 'nombre_max', label: 'Nombre max de consommations', type: 'number', default: 10, min: 1, max: 100 },
+            ECHELLE_FIELD
+        ]
+    },
     fabtrack_machines: {
         titre: 'État machines',
         fields: [
@@ -1124,7 +1170,66 @@ const WIDGET_CONFIG_DEFINITIONS = {
                 { value: 'url', label: 'URL directe' }
             ], default: 'local' },
             { key: 'gif_url', label: 'GIF local', type: 'image_upload', default: '' },
-            { key: 'gif_direct_url', label: 'URL du GIF (.gif)', type: 'text', default: '', placeholder: 'https://media.tenor.com/.../tenor.gif' }
+            { key: 'gif_direct_url', label: 'URL du GIF (.gif)', type: 'text', default: '', placeholder: 'https://media.tenor.com/.../tenor.gif' },
+            { key: 'gif_object_fit', label: 'Ajustement', type: 'select', options: [
+                { value: 'none', label: 'Taille d\'origine' },
+                { value: 'contain', label: 'Centré (contenir)' },
+                { value: 'cover', label: 'Couvrir' },
+                { value: 'fill', label: 'Étendu (étirer)' },
+                { value: 'scale-down', label: 'Réduire si nécessaire' }
+            ], default: 'cover' },
+            { key: 'gif_position', label: 'Position', type: 'select', options: [
+                { value: 'center', label: 'Centre' },
+                { value: 'top', label: 'Haut' },
+                { value: 'bottom', label: 'Bas' },
+                { value: 'left', label: 'Gauche' },
+                { value: 'right', label: 'Droite' },
+                { value: 'top left', label: 'Haut gauche' },
+                { value: 'top right', label: 'Haut droite' },
+                { value: 'bottom left', label: 'Bas gauche' },
+                { value: 'bottom right', label: 'Bas droite' }
+            ], default: 'center' },
+            ECHELLE_FIELD
+        ]
+    },
+    // Alias legacy conservés pour ouvrir la configuration même si un ancien code subsiste.
+    fabtrack: {
+        titre: 'Stats Fabtrack',
+        fields: [
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
+            { key: 'periode', label: 'Période', type: 'select', options: [
+                { value: 'jour', label: "Aujourd'hui" },
+                { value: 'semaine', label: 'Cette semaine' },
+                { value: 'mois', label: 'Ce mois' }
+            ], default: 'jour' },
+            ECHELLE_FIELD
+        ]
+    },
+    graph_conso: {
+        titre: 'Consommations Fabtrack',
+        fields: [
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
+            { key: 'nombre_max', label: 'Nombre max de consommations', type: 'number', default: 10, min: 1, max: 100 },
+            ECHELLE_FIELD
+        ]
+    },
+    machines: {
+        titre: 'État machines',
+        fields: [
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
+            { key: 'afficher_inactives', label: 'Afficher les machines inactives', type: 'checkbox', default: false },
+            ECHELLE_FIELD
+        ]
+    },
+    missions: {
+        titre: 'Missions Fabtrack',
+        fields: [
+            { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
+            { key: 'nombre_max', label: 'Nombre max par colonne', type: 'number', default: 10, min: 1, max: 50 },
+            { key: 'afficher_a_faire', label: 'Afficher "À faire"', type: 'checkbox', default: true },
+            { key: 'afficher_en_cours', label: 'Afficher "En cours"', type: 'checkbox', default: true },
+            { key: 'afficher_termine', label: 'Afficher "Terminé"', type: 'checkbox', default: false },
+            ECHELLE_FIELD
         ]
     }
 };
@@ -1197,14 +1302,26 @@ async function buildWidgetConfigFormAsync(configDef, currentConfig) {
             sourcesCache[st] = [];
         }
     }
+
+    // Précharger les médias déjà uploadés (images/vidéos) pour permettre la re-sélection.
+    const mediaCache = { image: [], video: [] };
+    try {
+        const mediaResp = await apiCall('/api/medias');
+        const medias = Array.isArray(mediaResp.data) ? mediaResp.data : [];
+        mediaCache.image = medias.filter(m => m && m.type === 'image');
+        mediaCache.video = medias.filter(m => m && m.type === 'video');
+    } catch (e) {
+        mediaCache.image = [];
+        mediaCache.video = [];
+    }
     
     return configDef.fields.map(field => {
         const value = currentConfig[field.key] !== undefined ? currentConfig[field.key] : field.default;
-        return buildFieldHtml(field, value, sourcesCache);
+        return buildFieldHtml(field, value, sourcesCache, mediaCache);
     }).join('');
 }
 
-function buildFieldHtml(field, value, sourcesCache) {
+function buildFieldHtml(field, value, sourcesCache, mediaCache) {
     switch (field.type) {
         case 'source_select': {
             const sources = (sourcesCache || {})[field.source_type] || [];
@@ -1272,19 +1389,41 @@ function buildFieldHtml(field, value, sourcesCache) {
                 '</div>';
 
         case 'image_upload':
+            const images = (mediaCache && Array.isArray(mediaCache.image)) ? mediaCache.image : [];
+            const imageOptions = ['<option value="">Sélectionner une image déjà uploadée</option>'];
+            images.forEach(function(media) {
+                const mediaUrl = String(media.url || '');
+                const selected = String(value || '') === mediaUrl ? ' selected' : '';
+                const label = media.filename || mediaUrl;
+                imageOptions.push('<option value="' + escapeHtml(mediaUrl) + '"' + selected + '>' + escapeHtml(label) + '</option>');
+            });
             return '<div class="mb-3">' +
                 '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
                 (value ? '<div class="mb-2"><img src="' + escapeHtml(value) + '" style="max-width:100%;max-height:120px;border-radius:6px;border:1px solid #dee2e6;"></div>' : '') +
                 '<input type="hidden" data-config-key="' + field.key + '" value="' + escapeHtml(String(value || '')) + '">' +
+                '<select class="form-select mb-2" onchange="selectExistingMedia(this, \'' + field.key + '\', \'image\')">' +
+                imageOptions.join('') +
+                '</select>' +
                 '<input type="file" class="form-control" accept="image/*" onchange="uploadImageField(this, \'' + field.key + '\')">' +
                 '<small class="form-text text-muted">JPG, PNG, GIF, WebP, SVG acceptés.</small>' +
                 '</div>';
 
         case 'video_upload':
+            const videos = (mediaCache && Array.isArray(mediaCache.video)) ? mediaCache.video : [];
+            const videoOptions = ['<option value="">Sélectionner une vidéo déjà uploadée</option>'];
+            videos.forEach(function(media) {
+                const mediaUrl = String(media.url || '');
+                const selected = String(value || '') === mediaUrl ? ' selected' : '';
+                const label = media.filename || mediaUrl;
+                videoOptions.push('<option value="' + escapeHtml(mediaUrl) + '"' + selected + '>' + escapeHtml(label) + '</option>');
+            });
             return '<div class="mb-3">' +
                 '<label class="form-label">' + escapeHtml(field.label) + '</label>' +
                 '<input type="hidden" data-config-key="' + field.key + '" value="' + escapeHtml(String(value || '')) + '">' +
                 (value ? '<div class="mb-2"><small class="text-success"><i class="bi bi-check-circle"></i> ' + escapeHtml(value) + '</small></div>' : '') +
+                '<select class="form-select mb-2" onchange="selectExistingMedia(this, \'' + field.key + '\', \'video\')">' +
+                videoOptions.join('') +
+                '</select>' +
                 '<input type="file" class="form-control mb-2" accept="video/mp4,video/webm,video/ogg" onchange="uploadVideoField(this, \'' + field.key + '\')">' +
                 '<input type="text" class="form-control" placeholder="Ou saisissez l\'ID YouTube/Dailymotion ou une URL" ' +
                 'value="' + escapeHtml(String(value || '')) + '" ' +
@@ -1317,7 +1456,7 @@ function buildFieldHtml(field, value, sourcesCache) {
 function buildWidgetConfigForm(configDef, currentConfig) {
     return configDef.fields.map(field => {
         const value = currentConfig[field.key] !== undefined ? currentConfig[field.key] : field.default;
-        return buildFieldHtml(field, value, {});
+        return buildFieldHtml(field, value, {}, { image: [], video: [] });
     }).join('');
 }
 

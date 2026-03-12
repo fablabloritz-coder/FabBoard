@@ -4,11 +4,13 @@
     {% set gif_direct_url = config.get('gif_direct_url', '') %}
     {% set legacy_tenor_url = config.get('tenor_gif_url', '') %}
     {% set active_gif_url = gif_direct_url or legacy_tenor_url %}
+    {% set gif_object_fit = config.get('gif_object_fit', 'cover') %}
+    {% set gif_position = config.get('gif_position', 'center') %}
 
     {% if gif_type == 'local' and gif_url %}
-    <img class="gif-display" src="{{ gif_url }}" alt="GIF">
+    <img class="gif-display" src="{{ gif_url }}" alt="GIF" style="object-fit: {{ gif_object_fit }}; object-position: {{ gif_position }};">
     {% elif (gif_type == 'url' and gif_direct_url) or (gif_type == 'tenor' and legacy_tenor_url) %}
-    <img class="gif-display" id="gif-display-{{ widget_id }}" src="{{ active_gif_url }}" alt="GIF">
+    <img class="gif-display" id="gif-display-{{ widget_id }}" src="{{ active_gif_url }}" alt="GIF" style="object-fit: {{ gif_object_fit }}; object-position: {{ gif_position }};">
 
     <script>
     (function() {

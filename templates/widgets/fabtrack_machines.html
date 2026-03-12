@@ -67,7 +67,9 @@
     }
 
     function render(machines, fabtrackError) {
-        if (fabtrackError && !machines.length) {
+        const visibleMachines = showInactive ? (machines || []) : (machines || []).filter(m => m.actif !== 0);
+
+        if (fabtrackError && !visibleMachines.length) {
             grid.innerHTML = `<div style="text-align:center; padding:1.5rem; color:#64748b;">
                 <div style="font-size:2rem; margin-bottom:0.5rem;">🔧</div>
                 <div>Fabtrack non connecté</div>
@@ -76,12 +78,12 @@
             return;
         }
 
-        if (!machines.length) {
-            grid.innerHTML = '<div style="color: #475569;">Aucune machine retournee. Verifiez Fabtrack /api/reference.</div>';
+        if (!visibleMachines.length) {
+            grid.innerHTML = '<div style="color: #475569;">Aucune machine visible avec ce filtre.</div>';
             return;
         }
 
-        grid.innerHTML = machines.map((m) => `
+        grid.innerHTML = visibleMachines.map((m) => `
             <div class="machine-card">
                 <div class="machine-name">${esc(m.nom || 'Machine')}</div>
                 <span class="badge ${statusClass(m.statut)}">${esc(m.statut || 'inconnu')}</span>
@@ -92,6 +94,7 @@
 
     const config = {{ config | tojson | safe }};
     const sourceId = config.source_id || null;
+    const showInactive = config.afficher_inactives === true;
 
     async function refresh() {
         const store = window.FabBoardStore;
