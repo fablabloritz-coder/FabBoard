@@ -243,14 +243,13 @@ def init_db():
             ('calendrier', 'Événements calendrier', 'Prochains événements CalDAV', '📅', 'calendrier'),
             ('fabtrack_stats', 'Stats Fabtrack', 'Statistiques globales Fabtrack', '📈', 'fabtrack'),
             ('fabtrack_machines', 'État machines', 'État des machines Fabtrack', '🔧', 'fabtrack'),
-            ('fabtrack_conso', 'Dernières consommations', 'Dernières consommations Fabtrack', '💰', 'fabtrack'),
+            ('fabtrack_missions', 'Missions Fabtrack', 'Tableau missions depuis Fabtrack (lecture seule)', '✅', 'fabtrack'),
             ('imprimantes', 'Imprimantes 3D', 'État des imprimantes 3D', '🖨️', 'imprimantes'),
             ('meteo', 'Météo', 'Météo locale', '🌤️', 'general'),
             ('texte_libre', 'Texte libre', 'Zone de texte personnalisée', '📝', 'general'),
             ('image', 'Image', 'Affiche une image (JPG, PNG)', '🖼️', 'general'),
             ('video', 'Vidéo', 'Affiche une vidéo locale ou YouTube/Dailymotion', '🎬', 'general'),
             ('timer', 'Timer', 'Compte à rebours vers une date/heure cible', '⏱️', 'general'),
-            ('missions', 'Missions', 'Tableau kanban : à faire / en cours / terminé', '✅', 'general'),
             ('gif', 'GIF', 'Affiche un GIF animé (Tenor ou local)', '🎞️', 'general'),
         ]
         
@@ -280,7 +279,7 @@ def init_db():
         slide_id = c.lastrowid
         
         # Ajouter les 6 widgets par défaut
-        widget_codes = ['compteurs', 'activites', 'fabtrack_stats', 'imprimantes', 'calendrier', 'fabtrack_conso']
+        widget_codes = ['compteurs', 'activites', 'fabtrack_stats', 'imprimantes', 'calendrier', 'fabtrack_missions']
         for idx, widget_code in enumerate(widget_codes):
             widget_id = c.execute('SELECT id FROM widgets_disponibles WHERE code = ?', (widget_code,)).fetchone()[0]
             c.execute('''

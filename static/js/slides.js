@@ -1059,11 +1059,14 @@ const WIDGET_CONFIG_DEFINITIONS = {
             ECHELLE_FIELD
         ]
     },
-    fabtrack_conso: {
-        titre: 'Dernières consommations',
+    fabtrack_missions: {
+        titre: 'Missions Fabtrack',
         fields: [
             { key: 'source_id', label: 'Source Fabtrack', type: 'source_select', source_type: 'fabtrack', default: '' },
-            { key: 'nombre_max', label: 'Nombre max', type: 'number', default: 5, min: 1, max: 20 },
+            { key: 'nombre_max', label: 'Nombre max par colonne', type: 'number', default: 10, min: 1, max: 50 },
+            { key: 'afficher_a_faire', label: 'Afficher "À faire"', type: 'checkbox', default: true },
+            { key: 'afficher_en_cours', label: 'Afficher "En cours"', type: 'checkbox', default: true },
+            { key: 'afficher_termine', label: 'Afficher "Terminé"', type: 'checkbox', default: false },
             ECHELLE_FIELD
         ]
     },
@@ -1110,16 +1113,6 @@ const WIDGET_CONFIG_DEFINITIONS = {
             { key: 'date_cible', label: 'Date cible', type: 'date', default: '' },
             { key: 'heure_cible', label: 'Heure cible', type: 'time', default: '00:00' },
             { key: 'afficher_secondes', label: 'Afficher les secondes', type: 'checkbox', default: true },
-            ECHELLE_FIELD
-        ]
-    },
-    missions: {
-        titre: 'Missions',
-        fields: [
-            { key: 'nombre_max', label: 'Nombre max par colonne', type: 'number', default: 10, min: 1, max: 50 },
-            { key: 'afficher_a_faire', label: 'Afficher "À faire"', type: 'checkbox', default: true },
-            { key: 'afficher_en_cours', label: 'Afficher "En cours"', type: 'checkbox', default: true },
-            { key: 'afficher_termine', label: 'Afficher "Terminé"', type: 'checkbox', default: true },
             ECHELLE_FIELD
         ]
     },

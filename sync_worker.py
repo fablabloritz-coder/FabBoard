@@ -176,10 +176,21 @@ class SyncWorker:
                 for m in (reference.get('machines') or [])
             ]
             
+            # Missions
+            missions = []
+            try:
+                missions_resp = requests.get(f"{url}/missions/api/list", timeout=4)
+                if missions_resp.status_code == 200:
+                    missions_data = missions_resp.json()
+                    missions = missions_data.get('data', [])
+            except requests.RequestException:
+                pass  # Missions optionnelles
+            
             return {
                 'summary': summary,
                 'consommations': conso.get('data', []),
                 'machines': machines,
+                'missions': missions,
                 'fetched_at': datetime.now().isoformat(),
             }, ''
         except requests.RequestException as e:

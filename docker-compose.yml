@@ -12,8 +12,10 @@ services:
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-}
       FLASK_DEBUG: "0"
       TZ: ${TZ:-Europe/Paris}
-      # URL Fabtrack pour interconnexion (adapter si Fabtrack tourne sur un autre hôte)
+      # Sources de données préconfigurées au premier lancement
+      # Adaptez les URLs si les apps tournent sur un autre hôte
       FABTRACK_URL: ${FABTRACK_URL:-http://host.docker.internal:5555}
+      PRETGO_URL: ${PRETGO_URL:-http://host.docker.internal:5000}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

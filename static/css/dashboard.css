@@ -228,12 +228,18 @@
 }
 
 /* ========== MACHINES ========== */
-.widget-fabtrack-machines { padding: 0; }
+.widget-fabtrack-machines {
+    padding: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
 
 .machines-grid,
 .js-machines-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr));
     gap: 0.7rem;
     flex: 1;
     overflow-y: auto;
@@ -247,6 +253,8 @@
     border-radius: 8px;
     padding: 0.7rem;
     text-align: center;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .machine-name {
@@ -254,6 +262,9 @@
     color: #e2e8f0;
     margin-bottom: 0.4rem;
     font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* ========== IMPRIMANTES ========== */
@@ -550,7 +561,8 @@
 .dashboard-widget[class*="widget-scale-"] .compteur-sub { font-size: calc(0.6rem * var(--ws)); }
 .dashboard-widget[class*="widget-scale-"] .activite-titre { font-size: calc(0.82rem * var(--ws)); }
 .dashboard-widget[class*="widget-scale-"] .activite-meta { font-size: calc(0.75rem * var(--ws)); }
-.dashboard-widget[class*="widget-scale-"] .machine-name { font-size: calc(0.8rem * var(--ws)); }
+.dashboard-widget[class*="widget-scale-"] .machine-name { font-size: clamp(0.7rem, calc(0.8rem * var(--ws)), 1.4rem); }
+.dashboard-widget[class*="widget-scale-"] .machine-card .badge { font-size: clamp(0.6rem, calc(0.65rem * var(--ws)), 1.1rem); }
 .dashboard-widget[class*="widget-scale-"] .printer-name { font-size: calc(0.8rem * var(--ws)); }
 .dashboard-widget[class*="widget-scale-"] .cal-day-header { font-size: calc(0.85rem * var(--ws)); }
 .dashboard-widget[class*="widget-scale-"] .cal-event-title { font-size: calc(0.88rem * var(--ws)); }
@@ -565,6 +577,16 @@
 .dashboard-widget[class*="widget-scale-"] .type-count { font-size: calc(1.1rem * var(--ws)); }
 .dashboard-widget[class*="widget-scale-"] .total-row { font-size: calc(0.8rem * var(--ws)); }
 .dashboard-widget[class*="widget-scale-"] .total-value { font-size: calc(1rem * var(--ws)); }
+
+/* --- Machines grid : colonnes plus larges avec le scale --- */
+.dashboard-widget[class*="widget-scale-"] .machines-grid,
+.dashboard-widget[class*="widget-scale-"] .js-machines-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(calc(120px * var(--ws)), 100%), 1fr));
+    gap: calc(0.5rem * var(--ws));
+}
+.dashboard-widget[class*="widget-scale-"] .machine-card {
+    padding: calc(0.5rem * var(--ws));
+}
 
 /* --- Horloge : multiplier les clamp() --- */
 .dashboard-widget[class*="widget-scale-"] .horloge-heure {
@@ -871,124 +893,6 @@
     font-size: 2rem;
     display: block;
     margin-bottom: 0.4em;
-}
-
-/* ========== WIDGET MISSIONS (KANBAN) ========== */
-.widget-missions {
-    height: 100%;
-    padding: 0.4rem;
-    overflow: hidden;
-}
-.missions-kanban {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 0.4rem;
-    height: 100%;
-}
-.missions-col {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    border-radius: 8px;
-    overflow: hidden;
-}
-.missions-col-header {
-    font-size: calc(0.7rem * var(--ws, 1));
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 0.4em 0.6em;
-    display: flex;
-    align-items: center;
-    gap: 0.4em;
-}
-.missions-col-header i { font-size: 0.9em; }
-.missions-count {
-    margin-left: auto;
-    background: rgba(255,255,255,0.1);
-    padding: 0 0.45em;
-    border-radius: 9999px;
-    font-size: 0.85em;
-}
-.missions-col-todo .missions-col-header { background: rgba(99,102,241,0.15); color: #a5b4fc; }
-.missions-col-doing .missions-col-header { background: rgba(249,115,22,0.15); color: #fdba74; }
-.missions-col-done .missions-col-header { background: rgba(34,197,94,0.15); color: #86efac; }
-
-.missions-col-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0.3rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-.mission-card {
-    background: rgba(255,255,255,0.05);
-    border-radius: 6px;
-    padding: 0.4em 0.5em;
-    border-left: 4px solid transparent;
-}
-.mission-card.priorite-haute {
-    border-left-color: #f59e0b;
-    background: rgba(245,158,11,0.08);
-}
-.mission-card.priorite-urgente {
-    border-left-color: #ef4444;
-    background: rgba(239,68,68,0.1);
-}
-.mission-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.3em;
-}
-.mission-titre {
-    font-size: calc(0.72rem * var(--ws, 1));
-    font-weight: 600;
-    color: #e2e8f0;
-    flex: 1;
-    min-width: 0;
-}
-.mission-prio-badge {
-    font-size: calc(0.55rem * var(--ws, 1));
-    font-weight: 700;
-    padding: 0.1em 0.45em;
-    border-radius: 9999px;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-.prio-haute  { background: rgba(245,158,11,0.25); color: #fbbf24; }
-.prio-urgente{ background: rgba(239,68,68,0.25);  color: #f87171; }
-.mission-desc {
-    font-size: calc(0.63rem * var(--ws, 1));
-    color: #94a3b8;
-    margin-top: 0.2em;
-    line-height: 1.3;
-}
-.mission-overdue {
-    box-shadow: 0 0 0 1px rgba(239,68,68,0.5);
-}
-.mission-footer {
-    margin-top: 0.25em;
-    display: flex;
-    gap: 0.4em;
-    flex-wrap: wrap;
-}
-.mission-echeance {
-    font-size: calc(0.55rem * var(--ws, 1));
-    padding: 0.1em 0.4em;
-    border-radius: 4px;
-    font-weight: 600;
-}
-.echeance-late  { background: rgba(239,68,68,0.2);  color: #f87171; }
-.echeance-today { background: rgba(245,158,11,0.2); color: #fbbf24; }
-.echeance-soon  { background: rgba(251,191,36,0.15);color: #fcd34d; }
-.echeance-ok    { background: rgba(148,163,184,0.1); color: #94a3b8; }
-.missions-empty {
-    text-align: center;
-    color: #475569;
-    font-size: calc(0.7rem * var(--ws, 1));
-    padding: 0.5em;
 }
 
 /* ========== FOND DE SLIDE ========== */
