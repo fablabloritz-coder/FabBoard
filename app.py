@@ -12,6 +12,7 @@ import os
 import logging
 import requests as http_requests
 from urllib.parse import urlparse
+import atexit
 
 # ============================================================
 # APPLICATION
@@ -45,6 +46,17 @@ try:
     print('[App] Sync worker démarré!')
 except Exception as e:
     print(f'[App] Erreur démarrage worker: {e}')
+
+
+def _shutdown_worker_on_exit():
+    """Arrêt propre du worker lors de l'extinction du process."""
+    try:
+        stop_sync_worker()
+    except Exception:
+        pass
+
+
+atexit.register(_shutdown_worker_on_exit)
 
 
 # ============================================================
@@ -162,16 +174,6 @@ def _auto_bootstrap_sources():
         print(f'[Bootstrap] Erreur auto-détection: {e}')
     finally:
         db.close()
-
-
-# ============================================================
-# TEARDOWN
-# ============================================================
-
-@app.teardown_appcontext
-def shutdown_sync_worker(exception=None):
-    """Arrête le worker au shutdown de l'app."""
-    stop_sync_worker()
 
 
 # ============================================================

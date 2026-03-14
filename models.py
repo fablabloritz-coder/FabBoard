@@ -28,9 +28,8 @@ def get_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=3000")
     return conn
 
 
@@ -38,6 +37,12 @@ def init_db():
     """Initialise la base de données avec le schéma."""
     conn = get_db()
     c = conn.cursor()
+
+    # Le mode WAL est persistant au niveau du fichier DB.
+    # L'appliquer ici évite de répéter un PRAGMA potentiellement bloquant
+    # à chaque nouvelle connexion (impact observé sur /api/worker/status).
+    c.execute("PRAGMA journal_mode=WAL")
+    c.execute("PRAGMA synchronous=NORMAL")
 
     c.executescript('''
     -- PHASE 1.5 : FabBoard est un système d'AFFICHAGE UNIQUEMENT

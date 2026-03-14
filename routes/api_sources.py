@@ -9,6 +9,7 @@ import json
 import os
 import requests as http_requests
 from urllib.parse import quote, urlparse
+from datetime import datetime
 
 bp = Blueprint('api_sources', __name__)
 
@@ -87,47 +88,59 @@ def _request_json(base_url, path, timeout=4):
 
 def _extract_fabtrack_payload(base_url):
     """Agrège les données nécessaires au dashboard depuis Fabtrack."""
-    ok_summary, summary, err_summary = _request_json(base_url, '/api/stats/summary')
-    ok_conso, conso, err_conso = _request_json(base_url, '/api/consommations?per_page=5&page=1')
-    ok_ref, reference, _ = _request_json(base_url, '/api/reference')
-    ok_missions, missions_payload, _ = _request_json(base_url, '/missions/api/list')
+    base_url = _normalize_base_url(base_url)
+    candidates = [base_url] if base_url else []
+    fallback = _default_fabtrack_url()
+    if fallback and fallback not in candidates:
+        if not base_url or _is_localhost_url(base_url):
+            candidates.append(fallback)
 
-    if not ok_summary and not ok_conso:
-        return None, f"Fabtrack indisponible: {err_summary or err_conso}"
+    last_error = ''
+    for candidate in candidates:
+        ok_summary, summary, err_summary = _request_json(candidate, '/api/stats/summary')
+        ok_conso, conso, err_conso = _request_json(candidate, '/api/consommations?per_page=5&page=1')
+        ok_ref, reference, _ = _request_json(candidate, '/api/reference')
+        ok_missions, missions_payload, _ = _request_json(candidate, '/missions/api/list')
 
-    summary = summary or {}
-    conso = conso or {}
-    reference = reference or {}
+        if not ok_summary and not ok_conso:
+            last_error = err_summary or err_conso or 'Service non disponible'
+            continue
 
-    machines = []
-    if ok_ref and isinstance(reference, dict):
-        for machine in (reference.get('machines') or []):
-            machines.append({
-                'id': machine.get('id'),
-                'nom': machine.get('nom', 'Machine'),
-                'statut': machine.get('statut', 'inconnu'),
-                'actif': machine.get('actif', 1),
-            })
+        summary = summary or {}
+        conso = conso or {}
+        reference = reference or {}
 
-    compteurs = {
-        'interventions_total': summary.get('total_interventions', 0),
-        'impression_3d_grammes': summary.get('total_3d_grammes', 0),
-        'decoupe_m2': summary.get('total_decoupe_m2', 0),
-        'papier_feuilles': summary.get('total_papier_feuilles', 0),
-    }
+        machines = []
+        if ok_ref and isinstance(reference, dict):
+            for machine in (reference.get('machines') or []):
+                machines.append({
+                    'id': machine.get('id'),
+                    'nom': machine.get('nom', 'Machine'),
+                    'statut': machine.get('statut', 'inconnu'),
+                    'actif': machine.get('actif', 1),
+                })
 
-    missions = []
-    if ok_missions and isinstance(missions_payload, dict):
-        missions = missions_payload.get('data', []) or []
+        compteurs = {
+            'interventions_total': summary.get('total_interventions', 0),
+            'impression_3d_grammes': summary.get('total_3d_grammes', 0),
+            'decoupe_m2': summary.get('total_decoupe_m2', 0),
+            'papier_feuilles': summary.get('total_papier_feuilles', 0),
+        }
 
-    return {
-        'compteurs': compteurs,
-        'fabtrack_stats': summary,
-        'activites': conso.get('data', []),
-        'machines': machines,
-        'missions': missions,
-        'source_url': base_url,
-    }, ''
+        missions = []
+        if ok_missions and isinstance(missions_payload, dict):
+            missions = missions_payload.get('data', []) or []
+
+        return {
+            'compteurs': compteurs,
+            'fabtrack_stats': summary,
+            'activites': conso.get('data', []),
+            'machines': machines,
+            'missions': missions,
+            'source_url': candidate,
+        }, ''
+
+    return None, f"Fabtrack indisponible: {last_error or 'Service non disponible'}"
 
 
 SUPPORTED_SOURCE_TYPES = {
@@ -229,6 +242,13 @@ def _coerce_source_payload(data, existing=None):
             return None, "Le champ 'url' est requis"
         if not (url.startswith('http://') or url.startswith('https://')):
             return None, "L'URL doit commencer par http:// ou https://"
+
+        # En Docker, localhost ne pointe pas Fabtrack mais le conteneur FabBoard.
+        if payload.get('type') == 'fabtrack' and _is_localhost_url(url):
+            fallback_url = _default_fabtrack_url()
+            if fallback_url and not _is_localhost_url(fallback_url):
+                url = fallback_url
+
         payload['url'] = url
     else:
         payload['url'] = existing['url']
@@ -276,6 +296,21 @@ def get_cached_source_data(source_id):
 
         if not row:
             return None
+
+        # Ne pas utiliser de cache expiré, sinon les widgets peuvent afficher un état obsolète.
+        expires_at = row['expires_at']
+        if expires_at:
+            try:
+                exp = datetime.fromisoformat(str(expires_at).replace('Z', ''))
+                if datetime.now() >= exp:
+                    db.execute('DELETE FROM sources_cache WHERE source_id = ?', (source_id,))
+                    db.commit()
+                    return None
+            except (ValueError, TypeError):
+                # Format invalide: on considère le cache invalide par sécurité.
+                db.execute('DELETE FROM sources_cache WHERE source_id = ?', (source_id,))
+                db.commit()
+                return None
 
         return json.loads(row['data_json'])
     except Exception as e:

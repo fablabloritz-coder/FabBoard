@@ -125,8 +125,10 @@ async function loadSourceTypes() {
         sourceTypes = result.data || [];
     } catch (error) {
         console.warn('Impossible de charger les types depuis API, fallback local:', error);
+        const host = window.location.hostname || 'localhost';
+        const fabtrackDefaultUrl = `http://${host}:5555`;
         sourceTypes = [
-            { code: 'fabtrack', label: 'Fabtrack', description: 'Statistiques et consommations Fabtrack', default_url: 'http://localhost:5555' },
+            { code: 'fabtrack', label: 'Fabtrack', description: 'Statistiques et consommations Fabtrack', default_url: fabtrackDefaultUrl },
             { code: 'repetier', label: 'Repetier Server', description: 'Etat des imprimantes 3D', default_url: 'http://localhost:3344' },
             { code: 'nextcloud_caldav', label: 'Nextcloud CalDAV', description: 'Calendrier externe', default_url: 'https://cloud.exemple.fr/remote.php/dav/calendars/user/calendrier' },
             { code: 'prusalink', label: 'PrusaLink', description: 'Imprimantes Prusa', default_url: 'http://localhost:8080' },
