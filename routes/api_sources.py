@@ -8,6 +8,7 @@ from models import get_db
 import json
 import os
 import requests as http_requests
+from urllib.parse import quote, urlparse
 
 bp = Blueprint('api_sources', __name__)
 
@@ -21,6 +22,27 @@ def _normalize_base_url(url):
     if not url:
         return ''
     return url.strip().rstrip('/')
+
+
+def _is_running_in_docker():
+    return os.path.exists('/.dockerenv')
+
+
+def _is_localhost_url(url):
+    try:
+        host = (urlparse(str(url)).hostname or '').lower()
+    except Exception:
+        return False
+    return host in ('localhost', '127.0.0.1', '::1')
+
+
+def _default_fabtrack_url():
+    from_env = _normalize_base_url(os.environ.get('FABTRACK_URL', ''))
+    if from_env:
+        return from_env
+    if _is_running_in_docker():
+        return 'http://host.docker.internal:5555'
+    return 'http://localhost:5555'
 
 
 def _get_active_source_url(source_type):
@@ -39,10 +61,13 @@ def _get_active_source_url(source_type):
 def _resolve_fabtrack_base_url():
     """Résout l'URL de Fabtrack via sources DB puis variable d'environnement."""
     from_db = _get_active_source_url('fabtrack')
+    fallback = _default_fabtrack_url()
+
     if from_db:
+        if _is_localhost_url(from_db) and fallback and not _is_localhost_url(fallback):
+            return fallback
         return from_db
-    from_env = os.environ.get('FABTRACK_URL', 'http://localhost:5555')
-    return _normalize_base_url(from_env)
+    return fallback
 
 
 def _request_json(base_url, path, timeout=4):
@@ -109,7 +134,7 @@ SUPPORTED_SOURCE_TYPES = {
     'fabtrack': {
         'label': 'Fabtrack',
         'description': 'Statistiques et consommations depuis Fabtrack',
-        'default_url': 'http://localhost:5555',
+        'default_url': _default_fabtrack_url(),
     },
     'repetier': {
         'label': 'Repetier Server',
@@ -404,8 +429,6 @@ def delete_source(id):
 @bp.route('/api/sources/<int:id>/test', methods=['POST'])
 def test_source(id):
     """Teste la connectivité d'une source configurée."""
-    from urllib.parse import quote
-
     db = get_db()
     try:
         source = db.execute('SELECT * FROM sources WHERE id = ?', (id,)).fetchone()
@@ -431,20 +454,39 @@ def test_source(id):
 
         if source['type'] == 'fabtrack':
             ok, data, err = _request_json(base_url, '/api/stats/summary')
+            tested_url = base_url
+
+            # Auto-réparation: source historique en localhost dans un contexte Docker.
+            if not ok and _is_localhost_url(base_url):
+                fallback_url = _default_fabtrack_url()
+                if fallback_url and fallback_url != base_url:
+                    ok_fb, data_fb, err_fb = _request_json(fallback_url, '/api/stats/summary')
+                    if ok_fb:
+                        tested_url = fallback_url
+                        ok = True
+                        data = data_fb
+                        err = ''
+                        db.execute('UPDATE sources SET url = ? WHERE id = ?', (fallback_url, id))
+                    else:
+                        err = err_fb or err
+
             if not ok:
                 _mark_test_result(False, err)
-                return jsonify({'success': False, 'error': err, 'url': base_url}), 400
+                return jsonify({'success': False, 'error': err, 'url': tested_url}), 400
 
             _mark_test_result(True)
-            return jsonify({
+            payload = {
                 'success': True,
-                'url': base_url,
+                'url': tested_url,
                 'summary': {
                     'total_interventions': data.get('total_interventions', 0),
                     'total_3d_grammes': data.get('total_3d_grammes', 0),
                     'total_decoupe_m2': data.get('total_decoupe_m2', 0),
                 },
-            })
+            }
+            if tested_url != base_url:
+                payload['message'] = f"URL corrigée automatiquement vers {tested_url}"
+            return jsonify(payload)
 
         if source['type'] == 'openweathermap':
             apikey = credentials.get('apikey') or credentials.get('api_key')

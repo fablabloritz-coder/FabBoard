@@ -221,7 +221,7 @@ def generate_demo_slides():
                 'widgets_disponibles': f'{nb_widgets} widgets configurés',
                 'intervalle': '5 secondes entre chaque slide',
                 'layout': 'Format 1×1 (plein écran)',
-                'source_fabtrack': 'Ajoutée automatiquement (http://localhost:5555)'
+                'source_fabtrack': 'Ajoutée automatiquement (URL Fabtrack configurée)'
             }
         })
         

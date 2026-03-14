@@ -11,6 +11,7 @@ from sync_worker import start_sync_worker, stop_sync_worker
 import os
 import logging
 import requests as http_requests
+from urllib.parse import urlparse
 
 # ============================================================
 # APPLICATION
@@ -87,16 +88,43 @@ def ensure_db():
         _db_initialized = True
 
 
+def _normalize_base_url(url):
+    if not url:
+        return ''
+    return str(url).strip().rstrip('/')
+
+
+def _is_running_in_docker():
+    return os.path.exists('/.dockerenv')
+
+
+def _is_localhost_url(url):
+    try:
+        host = (urlparse(str(url)).hostname or '').lower()
+    except Exception:
+        return False
+    return host in ('localhost', '127.0.0.1', '::1')
+
+
+def _default_fabtrack_url():
+    from_env = _normalize_base_url(os.environ.get('FABTRACK_URL', ''))
+    if from_env:
+        return from_env
+    if _is_running_in_docker():
+        return 'http://host.docker.internal:5555'
+    return 'http://localhost:5555'
+
+
 def _auto_bootstrap_sources():
     """Auto-détecte et crée automatiquement les sources connues au premier lancement."""
     db = get_db()
     try:
-        existing_fabtrack = db.execute(
-            "SELECT COUNT(*) as n FROM sources WHERE type = 'fabtrack'"
-        ).fetchone()['n']
+        fabtrack_url = _default_fabtrack_url()
+        existing_fabtrack_rows = db.execute(
+            "SELECT id, url FROM sources WHERE type = 'fabtrack' ORDER BY id"
+        ).fetchall()
 
-        if existing_fabtrack == 0:
-            fabtrack_url = os.environ.get('FABTRACK_URL', 'http://localhost:5555').rstrip('/')
+        if not existing_fabtrack_rows:
             actif = 0
 
             try:
@@ -115,6 +143,20 @@ def _auto_bootstrap_sources():
                 ('Fabtrack', 'fabtrack', fabtrack_url, actif)
             )
             db.commit()
+        elif fabtrack_url and not _is_localhost_url(fabtrack_url):
+            updated = 0
+            for row in existing_fabtrack_rows:
+                current_url = _normalize_base_url(row['url'])
+                if _is_localhost_url(current_url) and current_url != fabtrack_url:
+                    db.execute(
+                        'UPDATE sources SET url = ?, derniere_erreur = ? WHERE id = ?',
+                        (fabtrack_url, '', row['id'])
+                    )
+                    updated += 1
+
+            if updated:
+                db.commit()
+                print(f"[Bootstrap] {updated} source(s) Fabtrack migrée(s) vers {fabtrack_url}")
 
     except Exception as e:
         print(f'[Bootstrap] Erreur auto-détection: {e}')

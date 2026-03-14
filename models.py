@@ -10,6 +10,19 @@ from datetime import datetime, timedelta
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'fabboard.db')
 
 
+def _is_running_in_docker():
+    return os.path.exists('/.dockerenv')
+
+
+def _default_fabtrack_url():
+    from_env = (os.environ.get('FABTRACK_URL') or '').strip().rstrip('/')
+    if from_env:
+        return from_env
+    if _is_running_in_docker():
+        return 'http://host.docker.internal:5555'
+    return 'http://localhost:5555'
+
+
 def get_db():
     """Retourne une connexion à la base de données avec row_factory."""
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -612,11 +625,12 @@ def generate_demo_slides():
     # Ajouter une source Fabtrack de démonstration si pas présente
     c.execute('SELECT COUNT(*) FROM sources WHERE type = ?', ('fabtrack',))
     if c.fetchone()[0] == 0:
+        fabtrack_url = _default_fabtrack_url()
         c.execute('''INSERT OR IGNORE INTO sources 
                    (nom, type, url, credentials_json, sync_interval_sec, actif) 
                    VALUES (?,?,?,?,?,?)''',
-                  ('Fabtrack Local', 'fabtrack', 'http://localhost:5555', '{}', 30, 1))
-        print('[FabBoard] Source Fabtrack locale ajoutée: http://localhost:5555')
+                  ('Fabtrack Local', 'fabtrack', fabtrack_url, '{}', 30, 1))
+        print(f'[FabBoard] Source Fabtrack ajoutée: {fabtrack_url}')
     
     conn.commit()
     conn.close()

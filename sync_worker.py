@@ -11,6 +11,35 @@ from datetime import datetime, timedelta
 from models import get_db
 import requests
 from urllib.parse import quote
+import os
+from urllib.parse import urlparse
+
+
+def _normalize_base_url(url):
+    if not url:
+        return ''
+    return str(url).strip().rstrip('/')
+
+
+def _is_running_in_docker():
+    return os.path.exists('/.dockerenv')
+
+
+def _is_localhost_url(url):
+    try:
+        host = (urlparse(str(url)).hostname or '').lower()
+    except Exception:
+        return False
+    return host in ('localhost', '127.0.0.1', '::1')
+
+
+def _default_fabtrack_url():
+    from_env = _normalize_base_url(os.environ.get('FABTRACK_URL', ''))
+    if from_env:
+        return from_env
+    if _is_running_in_docker():
+        return 'http://host.docker.internal:5555'
+    return 'http://localhost:5555'
 
 
 class SyncWorker:
@@ -147,54 +176,64 @@ class SyncWorker:
     
     def _fetch_fabtrack(self, url, credentials):
         """Récupère les stats Fabtrack."""
-        url = url.rstrip('/')
-        
-        try:
-            # Stats summary
-            summary_resp = requests.get(f"{url}/api/stats/summary", timeout=4)
-            summary_resp.raise_for_status()
-            summary = summary_resp.json()
-            
-            # Consommations récentes
-            conso_resp = requests.get(f"{url}/api/consommations?per_page=10&page=1", timeout=4)
-            conso_resp.raise_for_status()
-            conso = conso_resp.json()
-            
-            # Reference (machines, etc)
-            ref_resp = requests.get(f"{url}/api/reference", timeout=4)
-            ref_resp.raise_for_status()
-            reference = ref_resp.json()
-            
-            # Compiler données
-            machines = [
-                {
-                    'id': m.get('id'),
-                    'nom': m.get('nom', 'Machine'),
-                    'statut': m.get('statut', 'inconnu'),
-                    'actif': m.get('actif', 1),
-                }
-                for m in (reference.get('machines') or [])
-            ]
-            
-            # Missions
-            missions = []
+        url = _normalize_base_url(url)
+        candidates = [url]
+
+        fallback = _default_fabtrack_url()
+        if _is_localhost_url(url) and fallback and fallback != url:
+            candidates.append(fallback)
+
+        last_error = 'Service non disponible'
+
+        for candidate in candidates:
             try:
-                missions_resp = requests.get(f"{url}/missions/api/list", timeout=4)
-                if missions_resp.status_code == 200:
-                    missions_data = missions_resp.json()
-                    missions = missions_data.get('data', [])
-            except requests.RequestException:
-                pass  # Missions optionnelles
-            
-            return {
-                'summary': summary,
-                'consommations': conso.get('data', []),
-                'machines': machines,
-                'missions': missions,
-                'fetched_at': datetime.now().isoformat(),
-            }, ''
-        except requests.RequestException as e:
-            return None, f"Fabtrack: {str(e)}"
+                # Stats summary
+                summary_resp = requests.get(f"{candidate}/api/stats/summary", timeout=4)
+                summary_resp.raise_for_status()
+                summary = summary_resp.json()
+
+                # Consommations récentes
+                conso_resp = requests.get(f"{candidate}/api/consommations?per_page=10&page=1", timeout=4)
+                conso_resp.raise_for_status()
+                conso = conso_resp.json()
+
+                # Reference (machines, etc)
+                ref_resp = requests.get(f"{candidate}/api/reference", timeout=4)
+                ref_resp.raise_for_status()
+                reference = ref_resp.json()
+
+                # Compiler données
+                machines = [
+                    {
+                        'id': m.get('id'),
+                        'nom': m.get('nom', 'Machine'),
+                        'statut': m.get('statut', 'inconnu'),
+                        'actif': m.get('actif', 1),
+                    }
+                    for m in (reference.get('machines') or [])
+                ]
+
+                # Missions
+                missions = []
+                try:
+                    missions_resp = requests.get(f"{candidate}/missions/api/list", timeout=4)
+                    if missions_resp.status_code == 200:
+                        missions_data = missions_resp.json()
+                        missions = missions_data.get('data', [])
+                except requests.RequestException:
+                    pass  # Missions optionnelles
+
+                return {
+                    'summary': summary,
+                    'consommations': conso.get('data', []),
+                    'machines': machines,
+                    'missions': missions,
+                    'fetched_at': datetime.now().isoformat(),
+                }, ''
+            except requests.RequestException as e:
+                last_error = str(e)
+
+        return None, f"Fabtrack: {last_error}"
     
     def _fetch_printer_api(self, url, credentials, source_type):
         """Récupère l'état des imprimantes (Repetier ou PrusaLink)."""
